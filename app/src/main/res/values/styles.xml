@@ -1,0 +1,10 @@
+<resources>
+    <style name="ArchiveTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#E1AB71</item>
+        <item name="android:windowBackground">#151111</item>
+        <item name="android:navigationBarColor">#151111</item>
+        <item name="android:statusBarColor">#151111</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
