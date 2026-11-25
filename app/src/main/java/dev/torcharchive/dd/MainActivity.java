@@ -322,14 +322,15 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         scroll.addView(centered, new ScrollView.LayoutParams(-1, -2));
         LinearLayout page = vertical();
         int pad = dp(wide ? 32 : 18);
-        page.setPadding(pad, dp(wide ? 24 : 14), pad, dp(28));
+        page.setPadding(pad, dp(wide && tab != 3 ? 24 : 14), pad, dp(28));
         int available = getResources().getDisplayMetrics().widthPixels - (wide ? dp(96) : 0);
         centered.addView(page, new FrameLayout.LayoutParams(Math.min(available, dp(1080)), -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL));
         boolean inModifierSub = (tab == 2 && modifierSection.isInSubPage());
         boolean inWorkshopDetail = tab == 3 && workshopOpen && workshop.hasDetail();
         if (!inModifierSub && !inWorkshopDetail) {
             boolean compact = tab == 3;
-            int heroHeight = compact ? (wide ? 116 : 112) : (wide ? 210 : 178);
+            int extraTextSpace = Math.round(Math.max(0f, getResources().getConfiguration().fontScale - 1f) * 72);
+            int heroHeight = compact ? (wide ? 92 : 112) + extraTextSpace : (wide ? 210 : 178);
             page.addView(hero(wide, compact), new LinearLayout.LayoutParams(-1, dp(heroHeight)));
         }
         if (busy || !note.isEmpty()) add(page, feedback(), inModifierSub ? 0 : 14);
@@ -353,9 +354,9 @@ public final class MainActivity extends Activity implements ModifierSection.Host
             }
             case 2 -> add(page, modifierSection.buildView(wide, display), inModifierSub ? (busy || !note.isEmpty() ? 10 : 0) : 18);
             case 3 -> {
-                if (!inWorkshopDetail) add(page, modNavigation(), 14);
+                if (!inWorkshopDetail) add(page, modNavigation(), 10);
                 if (workshopOpen) {
-                    add(page, workshop.build(wide), inWorkshopDetail ? 0 : 14);
+                    add(page, workshop.build(wide), inWorkshopDetail ? 0 : 10);
                     break;
                 }
                 add(page, actions(), 14);
@@ -424,7 +425,9 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         frame.setClipToOutline(true);
 
         ImageView art = new ImageView(this);
-        art.setImageResource(R.drawable.archive_illustration);
+        boolean direct = compact && workshopOpen && workshop.isDirectMode();
+        art.setImageResource(direct ? R.drawable.workshop_dispatch
+                : compact ? R.drawable.workshop_header : R.drawable.archive_illustration);
         art.setScaleType(ImageView.ScaleType.CENTER_CROP);
         art.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         frame.addView(art, new FrameLayout.LayoutParams(-1, -1));
@@ -441,7 +444,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
             case 0 -> "点亮火把";
             case 1 -> "存档书库";
             case 2 -> "完整修改器";
-            case 3 -> "模组工坊";
+            case 3 -> direct ? "公开 ZIP" : workshopOpen ? "创意工坊" : "模组库";
             case 4 -> "全机型分辨率与高刷";
             default -> "使用指南";
         };
@@ -449,7 +452,8 @@ public final class MainActivity extends Activity implements ModifierSection.Host
             case 0 -> "一体化薄壳启动器 · 外置数据包直读与 Steam 迁移";
             case 1 -> "同 UID 直连免拦截 · 自动留档与一键回档";
             case 2 -> "全字段二进制存档精修 · 二级详情页与规则 Mod 工坊";
-            case 3 -> "浏览 Steam 创意工坊，下载与管理模组";
+            case 3 -> direct ? "下载作者公开发布的模组"
+                    : workshopOpen ? "浏览 Steam 社区的《暗黑地牢》模组" : "管理已安装模组与档位加载顺序";
             case 4 -> "动态探测任意设备分辨率 · 支持 60 / 90 / 120 Hz 高刷适配";
             default -> "Steam 转安卓步骤 · 数据包路径与高级工具";
         };
@@ -457,12 +461,14 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         if (android.os.Build.VERSION.SDK_INT >= 28) heading.setAccessibilityHeading(true);
         if (compact) heading.setIncludeFontPadding(false);
         words.addView(heading);
-        View accent = new View(this);
-        accent.setBackgroundColor(GOLD);
-        LinearLayout.LayoutParams accentParams = new LinearLayout.LayoutParams(dp(34), dp(2));
-        accentParams.topMargin = dp(8);
-        accentParams.bottomMargin = dp(10);
-        if (!compact) words.addView(accent, accentParams);
+        if (!compact) {
+            View accent = new View(this);
+            accent.setBackgroundColor(GOLD);
+            LinearLayout.LayoutParams accentParams = new LinearLayout.LayoutParams(dp(34), dp(2));
+            accentParams.topMargin = dp(8);
+            accentParams.bottomMargin = dp(10);
+            words.addView(accent, accentParams);
+        }
         add(words, type(detail, 14, MUTED, Typeface.DEFAULT), compact ? 5 : 0);
         int width = dp(wide ? 480 : 285);
         frame.addView(words, new FrameLayout.LayoutParams(width, -1, Gravity.START | Gravity.CENTER_VERTICAL));
@@ -565,16 +571,15 @@ public final class MainActivity extends Activity implements ModifierSection.Host
 
     private View modNavigation() {
         LinearLayout row = horizontal();
-        TextView local = button("本地模组", !workshopOpen, () -> switchWorkshop(false, false));
-        local.setSelected(!workshopOpen);
+        row.setPadding(dp(4), dp(4), dp(4), dp(4));
+        row.setBackground(surface(PANEL, LINE, 12));
+        TextView local = segment("本地模组", !workshopOpen, () -> switchWorkshop(false, false));
         weighted(row, local, true);
         boolean steam = workshopOpen && !workshop.isDirectMode();
-        TextView online = button("在线工坊", steam, () -> switchWorkshop(true, false));
-        online.setSelected(steam);
+        TextView online = segment("在线工坊", steam, () -> switchWorkshop(true, false));
         weighted(row, online, true);
         boolean zip = workshopOpen && workshop.isDirectMode();
-        TextView direct = button("公开 ZIP", zip, () -> switchWorkshop(true, true));
-        direct.setSelected(zip);
+        TextView direct = segment("公开 ZIP", zip, () -> switchWorkshop(true, true));
         weighted(row, direct, false);
         return row;
     }
@@ -1682,6 +1687,24 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         return button;
     }
 
+    TextView segment(String label, boolean selected, Runnable click) {
+        TextView view = button(label, false, click);
+        view.setPadding(dp(6), dp(6), dp(6), dp(6));
+        styleSegment(view, selected);
+        return view;
+    }
+
+    void styleSegment(TextView view, boolean selected) {
+        view.setSelected(selected);
+        view.setTextColor(selected ? INK : MUTED);
+        view.setBackground(pressable(selected ? 0xff392923 : Color.TRANSPARENT,
+                selected ? 0xff92684d : 0, 8));
+    }
+
+    View glyph(String kind, int color) {
+        return new Glyph(kind, color);
+    }
+
     TextView type(String value, float size, int color, Typeface face) {
         TextView text = new TextView(this);
         text.setText(value);
@@ -1809,6 +1832,10 @@ public final class MainActivity extends Activity implements ModifierSection.Host
                     line(canvas, 12,15, 12,3, 8,7); line(canvas, 12,3, 16,7);
                 }
                 case "chevron" -> line(canvas, 8,5, 15,12, 8,19);
+                case "search" -> {
+                    canvas.drawCircle(10, 10, 5.5f, pen);
+                    line(canvas, 14,14, 20,20);
+                }
                 default -> {
                     canvas.drawCircle(12, 12, 9, pen);
                     canvas.drawArc(8,6,16,14,190,210,false,pen);

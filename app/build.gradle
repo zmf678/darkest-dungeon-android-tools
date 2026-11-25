@@ -11,8 +11,8 @@ android {
         applicationId lab ? 'dev.torcharchive.ddgame.lab' : 'dev.torcharchive.ddgame'
         minSdk 26
         targetSdk 36
-        versionCode 41
-        versionName '2.3.0'
+        versionCode 42
+        versionName '2.3.1'
         manifestPlaceholders = [archiveLabel: lab ? '暗黑地牢 · 余烬启动器(测试)' : '暗黑地牢 · 余烬启动器']
     }
 

@@ -6,6 +6,7 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.text.Editable;
@@ -65,6 +66,8 @@ final class WorkshopSection {
     private LinearLayout body, detailActions, detailHeading;
     private TextView downloadStatus, downloadAction;
     private ProgressBar downloadBar;
+    private ImageView downloadSeal;
+    private View downloadGlyph;
     private LinearLayout downloadPanel;
     private Download active;
     private ArchiveStore.Entry lastDownload;
@@ -118,7 +121,7 @@ final class WorkshopSection {
         this.wide = wide;
         LinearLayout root = host.vertical();
         if (selected != null) {
-            host.add(root, host.button("‹ 返回工坊", false, this::back), 0);
+            root.addView(host.button("‹ 返回工坊", false, this::back), new LinearLayout.LayoutParams(-2, -2));
             host.add(root, downloadPanel(), 12);
             detailHeading = host.vertical();
             detailHeading.addView(detailHeader(detail == null ? selected : detail.item()));
@@ -128,7 +131,9 @@ final class WorkshopSection {
             renderDetail();
             return root;
         }
-        host.add(root, downloadPanel(), 0);
+        LinearLayout.LayoutParams downloadParams = new LinearLayout.LayoutParams(-1, -2);
+        downloadParams.bottomMargin = host.dp(10);
+        root.addView(downloadPanel(), downloadParams);
         if (!directMode) host.add(root, searchControls(), 0);
         body = host.vertical();
         host.add(root, body, directMode ? 0 : 14);
@@ -142,10 +147,13 @@ final class WorkshopSection {
     }
 
     private View searchControls() {
-        LinearLayout controls = panel(14);
+        LinearLayout controls = panel(11);
         LinearLayout search = host.horizontal();
+        search.setGravity(Gravity.CENTER_VERTICAL);
         TextView[] sortButtons = new TextView[SORT.length];
-        EditText input = input("搜索模组名称或简介", false);
+        EditText input = input("搜索模组或粘贴工坊链接", false);
+        input.setBackgroundColor(Color.TRANSPARENT);
+        input.setPadding(host.dp(7), host.dp(8), host.dp(10), host.dp(8));
         input.setText(draft);
         input.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
@@ -163,7 +171,7 @@ final class WorkshopSection {
             else {
                 query = next;
                 loadPage(1, true);
-                for (int i = 0; i < SORT.length; i++) setSortState(sortButtons[i], i == sort && query.isEmpty());
+                for (int i = 0; i < SORT.length; i++) host.styleSegment(sortButtons[i], i == sort && query.isEmpty());
             }
         };
         input.setOnEditorActionListener((view, action, event) -> {
@@ -171,29 +179,46 @@ final class WorkshopSection {
             submit.run();
             return true;
         });
-        LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(0, -2, 1);
-        inputParams.setMarginEnd(host.dp(8));
-        search.addView(input, inputParams);
+        LinearLayout field = host.horizontal();
+        field.setGravity(Gravity.CENTER_VERTICAL);
+        field.setPadding(host.dp(10), 0, 0, 0);
+        field.setBackground(host.surface(BG, LINE, 9));
+        field.addView(host.glyph("search", GOLD), new LinearLayout.LayoutParams(host.dp(18), host.dp(18)));
+        field.addView(input, new LinearLayout.LayoutParams(0, -2, 1));
+        LinearLayout.LayoutParams fieldParams = new LinearLayout.LayoutParams(0, -2, 1);
+        fieldParams.setMarginEnd(host.dp(8));
+        search.addView(field, fieldParams);
         search.addView(host.button("搜索", true, submit), new LinearLayout.LayoutParams(-2, -2));
-        controls.addView(search);
 
         LinearLayout sorts = host.horizontal();
+        sorts.setPadding(host.dp(3), host.dp(3), host.dp(3), host.dp(3));
+        sorts.setBackground(host.surface(BG, LINE, 10));
         for (int i = 0; i < SORT.length; i++) {
             int option = i;
             boolean current = i == sort && query.isEmpty();
-            TextView button = host.button(SORT_LABELS[i], current, () -> {
+            TextView button = host.segment(SORT_LABELS[i], current, () -> {
                 sort = option;
                 query = draft = "";
                 loadPage(1, false);
                 host.showWorkshopPage(host.workshopScroll());
             });
             sortButtons[i] = button;
-            setSortState(button, current);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
-            if (i != 0) lp.setMarginStart(host.dp(6));
+            if (i != 0) lp.setMarginStart(host.dp(3));
             sorts.addView(button, lp);
         }
-        host.add(controls, sorts, 9);
+        if (host.getResources().getConfiguration().screenWidthDp >= 850) {
+            LinearLayout toolbar = host.horizontal();
+            toolbar.setGravity(Gravity.CENTER_VERTICAL);
+            toolbar.addView(search, new LinearLayout.LayoutParams(0, -2, 7));
+            LinearLayout.LayoutParams filters = new LinearLayout.LayoutParams(0, -2, 6);
+            filters.setMarginStart(host.dp(12));
+            toolbar.addView(sorts, filters);
+            controls.addView(toolbar);
+        } else {
+            controls.addView(search);
+            host.add(controls, sorts, 8);
+        }
         return controls;
     }
 
@@ -267,7 +292,7 @@ final class WorkshopSection {
         }
         String title = query.isEmpty() ? "Steam 创意工坊" : "搜索结果";
         if (results.items().isEmpty()) {
-            body.addView(state("没有找到模组", "试试其他关键词，也可以粘贴 Steam 工坊链接或条目 ID。"));
+            body.addView(emptyResults());
             return;
         }
         LinearLayout heading = host.horizontal();
@@ -552,8 +577,20 @@ final class WorkshopSection {
 
     private View downloadPanel() {
         downloadPanel = panel(14);
+        LinearLayout summary = host.horizontal();
+        summary.setGravity(Gravity.CENTER_VERTICAL);
+        FrameLayout mark = new FrameLayout(host);
+        mark.setBackground(host.surface(0xff352521, LINE, 9));
+        downloadGlyph = host.glyph("box", GOLD);
+        mark.addView(downloadGlyph, new FrameLayout.LayoutParams(host.dp(19), host.dp(19), Gravity.CENTER));
+        downloadSeal = illustration(R.drawable.workshop_status, ImageView.ScaleType.CENTER_CROP);
+        mark.addView(downloadSeal, new FrameLayout.LayoutParams(-1, -1));
+        summary.addView(mark, new LinearLayout.LayoutParams(host.dp(38), host.dp(38)));
         downloadStatus = host.type("", 14, INK, Typeface.DEFAULT_BOLD);
-        downloadPanel.addView(downloadStatus);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(0, -2, 1);
+        statusParams.setMarginStart(host.dp(9));
+        summary.addView(downloadStatus, statusParams);
+        downloadPanel.addView(summary);
         downloadBar = new ProgressBar(host, null, android.R.attr.progressBarStyleHorizontal);
         downloadBar.setProgressTintList(ColorStateList.valueOf(GOLD));
         downloadBar.setIndeterminateTintList(ColorStateList.valueOf(GOLD));
@@ -565,7 +602,13 @@ final class WorkshopSection {
                 renderDownload();
             } else if (lastDownload != null) host.modDetails(lastDownload);
         });
-        host.add(downloadPanel, downloadAction, 8);
+        if (wide) {
+            LinearLayout.LayoutParams actionParams = new LinearLayout.LayoutParams(-2, -2);
+            actionParams.setMarginStart(host.dp(10));
+            summary.addView(downloadAction, actionParams);
+        } else {
+            host.add(downloadPanel, downloadAction, 8);
+        }
         renderDownload();
         return downloadPanel;
     }
@@ -576,6 +619,8 @@ final class WorkshopSection {
         downloadPanel.setVisibility(job != null || !downloadMessage.isEmpty() ? View.VISIBLE : View.GONE);
         downloadBar.setVisibility(job != null ? View.VISIBLE : View.GONE);
         downloadAction.setVisibility(job != null || lastDownload != null ? View.VISIBLE : View.GONE);
+        downloadSeal.setVisibility(lastDownload != null ? View.VISIBLE : View.GONE);
+        downloadGlyph.setVisibility(lastDownload != null ? View.GONE : View.VISIBLE);
         downloadStatus.setTextColor(job != null ? GOLD : downloadFailed ? ERROR : GREEN);
         if (job == null) {
             downloadStatus.setText(downloadMessage);
@@ -597,10 +642,7 @@ final class WorkshopSection {
         FrameLayout frame = new FrameLayout(host);
         frame.setBackground(host.surface(RAISED, LINE, 8));
         frame.setClipToOutline(true);
-        ImageView cover = new ImageView(host);
-        cover.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        cover.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        cover.setImageResource(R.drawable.archive_illustration);
+        ImageView cover = illustration(R.drawable.workshop_placeholder, ImageView.ScaleType.CENTER_CROP);
         frame.addView(cover, new FrameLayout.LayoutParams(-1, -1));
         if (address.isEmpty()) return frame;
         Bitmap cached = images.get(address);
@@ -647,6 +689,30 @@ final class WorkshopSection {
         return panel;
     }
 
+    private View emptyResults() {
+        LinearLayout panel = panel(14);
+        LinearLayout row = host.horizontal();
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView mark = illustration(R.drawable.workshop_empty, ImageView.ScaleType.CENTER_CROP);
+        row.addView(mark, new LinearLayout.LayoutParams(host.dp(64), host.dp(64)));
+        LinearLayout words = host.vertical();
+        LinearLayout.LayoutParams text = new LinearLayout.LayoutParams(0, -2, 1);
+        text.setMarginStart(host.dp(10));
+        row.addView(words, text);
+        words.addView(heading("没有找到模组", 20));
+        host.add(words, host.type("试试其他关键词，也可以粘贴 Steam 工坊链接或条目 ID。", 14, MUTED, Typeface.DEFAULT), 5);
+        panel.addView(row);
+        return panel;
+    }
+
+    private ImageView illustration(int resource, ImageView.ScaleType scale) {
+        ImageView image = new ImageView(host);
+        image.setImageResource(resource);
+        image.setScaleType(scale);
+        image.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        return image;
+    }
+
     private View loading(String label) {
         LinearLayout row = host.horizontal();
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -684,12 +750,6 @@ final class WorkshopSection {
     private static void setEnabled(View view, boolean enabled) {
         view.setEnabled(enabled);
         view.setAlpha(enabled ? 1f : 0.48f);
-    }
-
-    private void setSortState(TextView button, boolean selected) {
-        button.setSelected(selected);
-        button.setTextColor(selected ? INK : GOLD);
-        button.setBackground(host.pressable(selected ? RED : RAISED, selected ? 0xffa35445 : LINE, 10));
     }
 
     private static String join(String left, String right) {

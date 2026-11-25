@@ -2,7 +2,7 @@
 
 > 返回导航：[工作区总索引](../INDEX.md) · [系统架构](../docs/ARCHITECTURE.md) · [修改器指南](../docs/MODIFIER-GUIDE.md) · [构建测试指南](../docs/BUILD-AND-TEST.md)
 
-`app/` 为「暗黑地牢 · 余烬启动器（v2.3.0）」原创 Android 客户端工程源码（`applicationId = "dev.torcharchive.ddgame"`，`minSdk 26`，`targetSdk 36`），提供统一启动入口、外置数据包挂载、分辨率与高刷设置、自动留档回档、联网模组工坊与内置修改器。
+`app/` 为「暗黑地牢 · 余烬启动器（v2.3.1）」原创 Android 客户端工程源码（`applicationId = "dev.torcharchive.ddgame"`，`minSdk 26`，`targetSdk 36`），提供统一启动入口、外置数据包挂载、分辨率与高刷设置、自动留档回档、联网模组工坊与内置修改器。
 
 ---
 
