@@ -29,7 +29,7 @@
    - 将「余烬档案馆」与游戏运行时合并为桌面唯一入口 **「暗黑地牢 · 余烬启动器」**（`dev.torcharchive.ddgame`）。
    - 游戏进程（`:nx`）与启动器主进程共享同一 Linux UID，彻底消除跨应用 `ContentProvider` 通信与 HyperOS `WakePathChecker` 拦截。
    - **A2-2 外置单包直读（默认）**：`PakMount.resolvePakPath()` 接管 `NxActivity.nxApk()`，直接从 `Android/media/dev.torcharchive.ddgame/dd_assets.pak`（`ZIP_STORED`）零解压偏移读取全部游戏资源；同时兼容 A1 单包内置模式。
-   - **全机型通用画面与 60 / 90 / 120 Hz 高刷适配（`DisplayConfig` + 原生控帧补丁）**：运行时自动探测任意手机、平板、折叠屏物理分辨率与面板支持刷新率，生成 4–6 组等比/高分/省电档位，支持「等比清晰 / 全屏铺满」与挖孔安全区避让；新增 **60 / 90 / 120 Hz / 自动最高（最高 165 Hz）** 高刷切换，同步接管 `Display.Mode`、`Surface.setFrameRate` 与 `libddnx.so` 原生 `nx_eglSwapBuffers` 控帧上限，解除原包 60 Hz 锁帧。
+   - **全机型通用画面、60 / 90 / 120 Hz 高刷与高清 Mod 贴图适配（`DisplayConfig` + 纯 GOT 原生补丁 + `Textures` Hook）**：运行时自动探测任意手机、平板、折叠屏物理分辨率与面板支持刷新率，生成 4–6 组等比/高分/省电档位，支持「等比清晰 / 全屏铺满」与挖孔安全区避让；新增 **60 / 90 / 120 Hz / 自动最高（最高 165 Hz）** 高刷切换（纯 `.got` 数据页 Hook 兼容 Android 15+ SELinux，零 `.text` 改写）；同时将内置 Mod 贴图转换倍率从 `0.65×` 改为 `1.0×` 并将 `heroes/` 列入无损 PNG 白名单，消除角色 Mod 缩图发糊。
    - **自动留档与直连原子回档（`GameArchive` / `SnapshotStore`）**：每次游戏保存自动生成快照，改档/回档前自动停止 `:nx` 进程并强制先行备份。
 
 2. **PC 端 Steam 资源转换与一键迁移（`dd-steam-converter/`）**

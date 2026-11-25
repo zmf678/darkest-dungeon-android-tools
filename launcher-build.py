@@ -159,6 +159,37 @@ def patch_wicked_smali(project: Path):
     )
     layer_view.write_text(lv_text[:m_begin] + m_stub + lv_text[m_end:], encoding="utf-8")
 
+    # Hook 7: Textures.smali -> disable 0.65x mod texture downscaling (SCALE=1.0f) and keep heroes/ as lossless PNG
+    textures = project / "smali/ru/darkest/port/Textures.smali"
+    tex_text = textures.read_text(encoding="utf-8")
+    if ".field static final SCALE:F = 0.65f" not in tex_text or "0x3f266666" not in tex_text:
+        raise ValueError("Could not locate SCALE=0.65f in Textures.smali")
+    tex_text = tex_text.replace(".field static final SCALE:F = 0.65f", ".field static final SCALE:F = 1.0f", 1)
+    tex_text = re.sub(
+        r"const (\w+), 0x3f266666([^\n]*)",
+        r"const/high16 \1, 0x3f800000    # 1.0f",
+        tex_text,
+        count=1,
+    )
+    keep_target = (
+        "    const/4 v0, 0x6\n\n"
+        "    new-array v0, v0, [Ljava/lang/String;"
+    )
+    keep_end = "    sput-object v0, Lru/darkest/port/Textures;->KEEP_DIRS:[Ljava/lang/String;"
+    if keep_target not in tex_text or keep_end not in tex_text:
+        raise ValueError("Could not locate KEEP_DIRS initializer in Textures.smali")
+    tex_text = tex_text.replace(
+        keep_target,
+        "    const/4 v0, 0x7\n\n    new-array v0, v0, [Ljava/lang/String;",
+        1,
+    )
+    tex_text = tex_text.replace(
+        keep_end,
+        '    const/4 v1, 0x6\n\n    const-string v2, "heroes/"\n\n    aput-object v2, v0, v1\n\n' + keep_end,
+        1,
+    )
+    textures.write_text(tex_text, encoding="utf-8")
+
 
 def compile_native_commit(ndk: Path, work: Path) -> Path:
     library = work / "libtorcharchive.so"

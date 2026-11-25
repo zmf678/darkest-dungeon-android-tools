@@ -1,3 +1,3 @@
-352bda0418a384444ea08c6585b27ad38122db415faddebe018244f437bf75c7  TorchLauncher-v2.1.apk
+ca812fbe8feba2e952a481f4b30548ec7435e72ea962441f7215b04dd7d60528  TorchLauncher-v2.1.apk
 130ae6b949545ce5da66e9c7d029c24d650ed6d12ec5a99ea085cd8509be86f2  wicked-runtime-shell.apk
 1128f79c80d0aeb607671e748c81cc747d69a52add0d0e492fcbc2d06826b336  switch-diff-layer.zip
