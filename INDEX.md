@@ -15,9 +15,9 @@
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | v2.0 一体化薄壳架构、4 处 Smali Hook、A2-2/A1 模式、ASTC 4×4 DDS 纹理与 `filelist.csv` 规范 | 架构师、逆向/移植开发者 |
 | [docs/MODIFIER-GUIDE.md](docs/MODIFIER-GUIDE.md) | 手机内置与 PC 端双端修改器使用指南、二进制 DSON 规范与规则覆写参数表 | 修改器使用者、DSON 开发者 |
 | [docs/BUILD-AND-TEST.md](docs/BUILD-AND-TEST.md) | 工具链环境、Gradle/薄壳 APK 构建、Steam 转换核验、单测与真机排障 | 构建发布、测试与排障人员 |
-| [docs/ROUTE-C-PURE-STEAM-PLAN.md](docs/ROUTE-C-PURE-STEAM-PLAN.md) | 路线 C（v3.0）纯正版 Steam 安卓开源运行方案总体架构、M0–M4 路线图与 15 项可执行任务清单 | 路线 C 开发者、架构师 |
-| [docs/M0-BENCHMARK.md](docs/M0-BENCHMARK.md) | 路线 C 阶段 M0 实测基准报告（环境、64 位裁剪同步、多运行时/图形后端 FPS 与内存对比、主引擎锁定） | 开发者、性能验收人员 |
-| [docs/M0-MUMU-POC-GUIDE.md](docs/M0-MUMU-POC-GUIDE.md) | 路线 C 阶段 M0 MuMu Android 15 模拟器复现手册、避坑实录与 M1 架构交接清单 | 测试与 M1 开发者 |
+| [docs/ROUTE-C-PURE-STEAM-PLAN.md](docs/ROUTE-C-PURE-STEAM-PLAN.md) | *（归档备忘）* 路线 C（v3.0）纯正版 Steam 安卓开源运行方案总体架构、M0–M4 路线图与 15 项任务清单 | 历史方案归档 |
+| [docs/M0-BENCHMARK.md](docs/M0-BENCHMARK.md) | *（归档备忘）* 路线 C 阶段 M0 实测基准报告（环境、64 位裁剪同步、多运行时/图形后端 FPS 与内存对比） | 历史实测归档 |
+| [docs/M0-MUMU-POC-GUIDE.md](docs/M0-MUMU-POC-GUIDE.md) | *（归档备忘）* 路线 C 阶段 M0 MuMu Android 15 模拟器复现手册、避坑实录与交接清单 | 历史复现归档 |
 | [app/README.md](app/README.md) | Android 一体化启动器 `dev.torcharchive.ddgame` 包结构、UI 页签与引擎类说明 | Android 客户端开发者 |
 | [dd-steam-converter/README.md](dd-steam-converter/README.md) | PC 端 Steam 资源转换、存档迁移、ADB 推送、CLI/GUI 修改器说明 | PC 工具链开发者与桌面用户 |
 | [game-patch/README.md](game-patch/README.md) | 原生 Hook（`commit.c`）、Java 主机测试集与 v1 双包方案历史参考 | 原生 Hook / 单测维护者 |
