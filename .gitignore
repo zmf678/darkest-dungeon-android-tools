@@ -6,6 +6,8 @@ __pycache__/
 /dist/
 /decoded/
 /NEXT-CHAT-AUTO-SAVES.md
+/TABLET-RESOLUTION-AND-MOD-MANAGER.md
+/PHASE-SUMMARY-*.md
 *.apk
 *.aab
 *.idsig

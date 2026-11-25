@@ -8,6 +8,7 @@ import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 import android.webkit.MimeTypeMap;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
@@ -63,14 +64,16 @@ final class ArchiveStore {
     record Installed(Doc folder, String title, String format) {}
     record ModFormat(int roots, boolean legacy, String title) {}
     record Slot(String name, int files, String change) {}
+    record ModPreset(String id, String name, List<String> modIds, long date) {}
 
-    private final File library, cache;
+    private final File library, cache, presetsFile;
     private final ContentResolver resolver;
     private final LiveArchive live;
 
     ArchiveStore(Context context) {
         library = new File(context.getFilesDir(), "archives");
         cache = new File(context.getCacheDir(), "archive-work");
+        presetsFile = new File(context.getFilesDir(), "mod-presets.json");
         resolver = context.getContentResolver();
         live = new LiveArchive(context);
     }
@@ -270,6 +273,59 @@ final class ArchiveStore {
         }
         installed.sort(Comparator.comparing(Installed::title, String.CASE_INSENSITIVE_ORDER));
         return installed;
+    }
+
+    InputStream openPayload(Entry entry) throws IOException {
+        return new FileInputStream(payload(entry));
+    }
+
+    List<ModPreset> listPresets() {
+        List<ModPreset> result = new ArrayList<>();
+        if (!presetsFile.isFile()) return result;
+        try {
+            JSONArray arr = new JSONArray(new String(Files.readAllBytes(presetsFile.toPath()), StandardCharsets.UTF_8));
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                JSONArray ids = o.optJSONArray("modIds");
+                List<String> list = new ArrayList<>();
+                if (ids != null) {
+                    for (int j = 0; j < ids.length(); j++) list.add(ids.getString(j));
+                }
+                result.add(new ModPreset(o.getString("id"), o.getString("name"), list, o.optLong("date", 0)));
+            }
+            result.sort(Comparator.comparingLong(ModPreset::date).reversed());
+        } catch (Exception ignored) {
+        }
+        return result;
+    }
+
+    ModPreset savePreset(String name, List<String> modIds) throws Exception {
+        String clean = name == null ? "" : name.trim();
+        if (clean.isEmpty()) throw new IOException("请输入预设名称。");
+        List<ModPreset> all = new ArrayList<>(listPresets());
+        ModPreset created = new ModPreset(UUID.randomUUID().toString(), clean, new ArrayList<>(modIds), System.currentTimeMillis());
+        all.add(0, created);
+        writePresets(all);
+        return created;
+    }
+
+    void deletePreset(String id) throws Exception {
+        List<ModPreset> all = new ArrayList<>(listPresets());
+        all.removeIf(item -> item.id.equals(id));
+        writePresets(all);
+    }
+
+    private void writePresets(List<ModPreset> presets) throws Exception {
+        JSONArray arr = new JSONArray();
+        for (ModPreset preset : presets) {
+            JSONArray ids = new JSONArray();
+            for (String m : preset.modIds) ids.put(m);
+            arr.put(new JSONObject().put("id", preset.id).put("name", preset.name)
+                    .put("date", preset.date).put("modIds", ids));
+        }
+        File temp = new File(presetsFile.getParentFile(), ".mod-presets.tmp");
+        Files.write(temp.toPath(), arr.toString(2).getBytes(StandardCharsets.UTF_8));
+        Files.move(temp.toPath(), presetsFile.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
     }
 
     String zipName(Entry entry) {

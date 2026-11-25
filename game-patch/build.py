@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import json
 from pathlib import Path
 import re
 import shutil
@@ -14,6 +15,15 @@ SOURCE = Path(__file__).resolve().parent
 BASE_HASH = "0b84730f228f4308fd408c880ad5fdfcb4f10fc096d97079857bbbc17a619410"
 PACKAGE = "dev.torcharchive.ddgame"
 PERMISSION = PACKAGE + ".permission.ARCHIVE"
+OPTIONS_OVERLAY = "assets/nx/overlay/shared/options/options.value_definitions.json"
+TABLET_RESOLUTIONS = [
+    [1280, 720],
+    [1920, 1080],
+    [2560, 1440],
+    [3008, 1692],
+    [2560, 1600],
+    [3008, 1880],
+]
 ANDROID = "{http://schemas.android.com/apk/res/android}"
 ET.register_namespace("android", ANDROID[1:-1])
 # Android APK readers accept ZIP32 offsets through 4 GiB. Python defaults to
@@ -60,7 +70,7 @@ def patch_manifest(project):
     tree.write(manifest, encoding="utf-8", xml_declaration=True)
     config = project / "apktool.yml"
     yaml = config.read_text(encoding="utf-8")
-    yaml, count = re.subn(r"(?m)^([ \t]*versionName:)[^\r\n]+$", r"\1 2.2.2-archive.1", yaml)
+    yaml, count = re.subn(r"(?m)^([ \t]*versionName:)[^\r\n]+$", r"\1 2.2.2-archive.2", yaml)
     if count != 1:
         raise ValueError("Unexpected input version metadata")
     config.write_text(yaml, encoding="utf-8")
@@ -78,7 +88,61 @@ def patch_activity(project):
         raise ValueError("Unexpected native-library launch sequence")
     load = load.replace("v0", matches[0])
     on_create = on_create.replace(load, load + "\n\n    invoke-static {p0}, Ldev/torcharchive/game/GameArchive;->install(Landroid/content/Context;)V", 1)
-    activity.write_text(text[:begin] + on_create + text[end:], encoding="utf-8")
+    text = text[:begin] + on_create + text[end:]
+
+    res_begin = text.index(".method private resolution()[I")
+    res_end = text.index(".end method", res_begin) + len(".end method")
+    res_stub = (
+        ".method private resolution()[I\n"
+        "    .locals 1\n\n"
+        "    invoke-static {p0}, Ldev/torcharchive/game/DisplayConfig;->resolveResolution(Landroid/content/Context;)[I\n"
+        "    move-result-object v0\n\n"
+        "    return-object v0\n"
+        ".end method"
+    )
+    text = text[:res_begin] + res_stub + text[res_end:]
+    activity.write_text(text, encoding="utf-8")
+
+    layer_view = project / "smali/ru/darkest/port/NxActivity$LayerView.smali"
+    lv_text = layer_view.read_text(encoding="utf-8")
+    m_begin = lv_text.index(".method protected onMeasure(II)V")
+    m_end = lv_text.index(".end method", m_begin) + len(".end method")
+    m_stub = (
+        ".method protected onMeasure(II)V\n"
+        "    .locals 4\n\n"
+        "    invoke-virtual {p0}, Lru/darkest/port/NxActivity$LayerView;->getContext()Landroid/content/Context;\n"
+        "    move-result-object v0\n\n"
+        "    invoke-static {}, Lru/darkest/port/NxActivity;->-$$Nest$sfgetLAYER_W()I\n"
+        "    move-result v1\n\n"
+        "    invoke-static {}, Lru/darkest/port/NxActivity;->-$$Nest$sfgetLAYER_H()I\n"
+        "    move-result v2\n\n"
+        "    invoke-static {v0, p1, p2, v1, v2}, Ldev/torcharchive/game/DisplayConfig;->measure(Landroid/content/Context;IIII)[I\n"
+        "    move-result-object v3\n\n"
+        "    const/4 v0, 0x0\n"
+        "    aget v0, v3, v0\n\n"
+        "    const/4 v1, 0x1\n"
+        "    aget v1, v3, v1\n\n"
+        "    invoke-virtual {p0, v0, v1}, Lru/darkest/port/NxActivity$LayerView;->setMeasuredDimension(II)V\n\n"
+        "    return-void\n"
+        ".end method"
+    )
+    layer_view.write_text(lv_text[:m_begin] + m_stub + lv_text[m_end:], encoding="utf-8")
+
+
+def patch_options_overlay(raw_bytes):
+    doc = json.loads(raw_bytes.decode("utf-8"))
+    patched = False
+    for entry in doc.get("value_definitions", []):
+        if entry.get("id") == "resolution":
+            entry.setdefault("data", {})["range"] = TABLET_RESOLUTIONS
+            patched = True
+    if not patched:
+        raise ValueError("Missing resolution definition in options.value_definitions.json")
+    compact = json.dumps(doc, separators=(",", ":")).encode("utf-8")
+    target_len = len(raw_bytes)
+    if len(compact) > target_len:
+        raise ValueError(f"Patched options JSON ({len(compact)}B) exceeds filelist.csv length ({target_len}B)")
+    return compact + b" " * (target_len - len(compact))
 
 
 def copy_entry(source, target, entry):
@@ -92,7 +156,7 @@ def compile_addon(args, work):
     classes.mkdir()
     compiler = args.jdk / "bin/javac.exe"
     api = args.sdk / "platforms/android-36/android.jar"
-    run(compiler, "--release", "11", "-Xlint:all", "-cp", api, "-d", classes, *sorted((SOURCE / "src").rglob("*.java")))
+    run(compiler, "-encoding", "UTF-8", "--release", "11", "-Xlint:all", "-cp", api, "-d", classes, *sorted((SOURCE / "src").rglob("*.java")))
     dex = work / "addon.zip"
     java = args.jdk / "bin/java.exe"
     d8 = args.build_tools / "lib/d8.jar"
@@ -131,7 +195,10 @@ def build(args, work):
         bundle.writestr("classes2.dex", addon.read("classes.dex"), compress_type=zipfile.ZIP_DEFLATED)
         bundle.write(library, "lib/arm64-v8a/libtorcharchive.so", compress_type=zipfile.ZIP_STORED)
         for entry in original.infolist():
-            if entry.filename.startswith(("assets/", "lib/")):
+            if entry.filename == OPTIONS_OVERLAY:
+                patched_json = patch_options_overlay(original.read(entry))
+                bundle.writestr(OPTIONS_OVERLAY, patched_json, compress_type=zipfile.ZIP_STORED)
+            elif entry.filename.startswith(("assets/", "lib/")):
                 copy_entry(original, bundle, entry)
 
     print("Aligning and signing local APK", flush=True)

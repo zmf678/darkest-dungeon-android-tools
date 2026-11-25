@@ -25,8 +25,9 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowInsets;
-import android.widget.EditText;
 import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -34,13 +35,19 @@ import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
+import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -50,8 +57,8 @@ public final class MainActivity extends Activity {
     private static final int RED = 0xff733029, ERROR = 0xffffb3a3, GREEN = 0xffc5cb9e;
     private static final int SAVE_TREE = 11, SAVE_ZIP = 12, MOD_ZIP = 13, MOD_TREE = 14, ZIP_OUT = 15, RESTORE_TREE = 16;
     private static final String GAME = "com.darkestdungeon";
-    private static final String[] TABS = {"存档", "模组", "指南"};
-    private static final String[] NAV_ICONS = {"book", "box", "help"};
+    private static final String[] TABS = {"存档", "模组", "画面", "指南"};
+    private static final String[] NAV_ICONS = {"book", "box", "screen", "help"};
     private static final ExecutorService IO = Executors.newSingleThreadExecutor();
     private static final int READ = Intent.FLAG_GRANT_READ_URI_PERMISSION;
     private static final int WRITE = Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
@@ -66,12 +73,18 @@ public final class MainActivity extends Activity {
     private String note = "";
     private String pendingId, pendingSlot;
     private String modFolderError = "";
+    private String liveModError = "";
+    private String liveDisplayError = "";
     private List<ArchiveStore.Entry> saves = Collections.emptyList(), mods = Collections.emptyList();
     private List<ArchiveStore.Entry> automatic = Collections.emptyList();
+    private List<ArchiveStore.ModPreset> presets = Collections.emptyList();
+    private List<LiveArchive.GameMod> gameMods = Collections.emptyList();
+    private List<LiveArchive.SlotMods> slotMods = Collections.emptyList();
+    private LiveArchive.DisplayInfo displayInfo;
     private String automaticStatus = "";
     private boolean observing;
     private final ContentObserver captureObserver = new ContentObserver(new Handler(Looper.getMainLooper())) {
-        @Override public void onChange(boolean selfChange) { refreshAutomatic(); }
+        @Override public void onChange(boolean selfChange) { refreshLive(false); }
     };
     private List<ArchiveStore.Installed> installed = Collections.emptyList();
     private ScrollView scroll;
@@ -112,7 +125,7 @@ public final class MainActivity extends Activity {
                 // The history query reports a certificate mismatch.
             }
         }
-        refreshAutomatic();
+        refreshLive(false);
     }
 
     @Override protected void onStop() {
@@ -123,17 +136,59 @@ public final class MainActivity extends Activity {
         super.onStop();
     }
 
-    private void refreshAutomatic() {
+    private void refreshLive(boolean notify) {
+        if (!live.available()) return;
+        if (notify) {
+            perform("正在同步实验版数据…", this::fetchLiveSnapshot, snap -> {
+                applyLiveSnapshot(snap);
+                message("实验版存档、模组与画面配置已同步");
+            });
+            return;
+        }
         IO.execute(() -> {
-            LiveArchive.History history = live.history();
+            LiveSnapshot snap = fetchLiveSnapshot();
             runOnUiThread(() -> {
                 if (isDestroyed()) return;
-                automatic = history.entries();
-                automaticStatus = history.status();
-                updateLists();
+                applyLiveSnapshot(snap);
                 redraw();
             });
         });
+    }
+
+    private record LiveSnapshot(LiveArchive.History history, List<LiveArchive.GameMod> mods,
+                                List<LiveArchive.SlotMods> slots, LiveArchive.DisplayInfo display,
+                                String modErr, String dispErr) {}
+
+    private LiveSnapshot fetchLiveSnapshot() {
+        LiveArchive.History history = live.history();
+        List<LiveArchive.GameMod> fetchedMods = Collections.emptyList();
+        List<LiveArchive.SlotMods> fetchedSlots = Collections.emptyList();
+        LiveArchive.DisplayInfo fetchedDisplay = null;
+        String modErr = "";
+        String dispErr = "";
+        try {
+            fetchedMods = live.listMods();
+            fetchedSlots = live.listSlotMods();
+        } catch (Exception ex) {
+            modErr = readable(ex);
+        }
+        try {
+            fetchedDisplay = live.display();
+        } catch (Exception ex) {
+            dispErr = readable(ex);
+        }
+        return new LiveSnapshot(history, fetchedMods, fetchedSlots, fetchedDisplay, modErr, dispErr);
+    }
+
+    private void applyLiveSnapshot(LiveSnapshot snap) {
+        automatic = snap.history.entries();
+        automaticStatus = snap.history.status();
+        gameMods = snap.mods;
+        slotMods = snap.slots;
+        displayInfo = snap.display;
+        liveModError = snap.modErr;
+        liveDisplayError = snap.dispErr;
+        updateLists();
     }
 
     @Override protected void onSaveInstanceState(Bundle state) {
@@ -151,7 +206,7 @@ public final class MainActivity extends Activity {
     private void reload() {
         updateLists();
         redraw();
-        if (prefs.contains("mods")) refreshMods(false);
+        if (!live.available() && prefs.contains("mods")) refreshMods(false);
     }
 
     private void selectTab(int value) {
@@ -161,6 +216,7 @@ public final class MainActivity extends Activity {
         note = "";
         noteRestore = false;
         draw();
+        if (live.available() && (tab == 1 || tab == 2)) refreshLive(false);
     }
 
     private void redraw() {
@@ -195,24 +251,26 @@ public final class MainActivity extends Activity {
         page.setPadding(pad, dp(wide ? 24 : 16), pad, dp(28));
         int available = getResources().getDisplayMetrics().widthPixels - (wide ? dp(96) : 0);
         centered.addView(page, new FrameLayout.LayoutParams(Math.min(available, dp(1060)), -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL));
-        page.addView(hero(wide), new LinearLayout.LayoutParams(-1, dp(wide ? 224 : 200)));
+        page.addView(hero(wide), new LinearLayout.LayoutParams(-1, dp(wide ? 210 : 188)));
         if (busy || !note.isEmpty()) add(page, feedback(), 14);
 
-        if (tab == 2) {
+        if (tab == 3) {
             add(page, guide(), 24);
+        } else if (tab == 2) {
+            add(page, displayPage(wide), 20);
         } else {
             add(page, actions(), 14);
             if (wide) {
                 LinearLayout columns = horizontal();
                 columns.setBaselineAligned(false);
                 add(page, columns, 24);
-                columns.addView(tab == 0 ? history() : modLibrary(), new LinearLayout.LayoutParams(0, -2, 7));
-                LinearLayout.LayoutParams right = new LinearLayout.LayoutParams(0, -2, 4);
+                columns.addView(tab == 0 ? history() : modsLeftColumn(), new LinearLayout.LayoutParams(0, -2, 7));
+                LinearLayout.LayoutParams right = new LinearLayout.LayoutParams(0, -2, 5);
                 right.setMarginStart(dp(24));
-                columns.addView(tab == 0 ? restoreGuide() : installedMods(), right);
+                columns.addView(tab == 0 ? restoreGuide() : modsRightColumn(), right);
             } else {
-                add(page, tab == 0 ? history() : modLibrary(), 24);
-                if (tab == 1) add(page, installedMods(), 24);
+                add(page, tab == 0 ? history() : modsLeftColumn(), 24);
+                if (tab == 1) add(page, modsRightColumn(), 24);
                 else add(page, restoreGuide(), 20);
             }
         }
@@ -259,21 +317,24 @@ public final class MainActivity extends Activity {
         frame.addView(shade, new FrameLayout.LayoutParams(-1, -1));
 
         LinearLayout words = vertical();
-        words.setPadding(dp(wide ? 28 : 20), dp(22), dp(18), dp(22));
+        words.setPadding(dp(wide ? 28 : 20), dp(20), dp(18), dp(20));
         words.setGravity(Gravity.CENTER_VERTICAL);
-        String title = tab == 0 ? "存档书库" : tab == 1 ? "模组工坊" : "使用指南";
-        String detail = tab == 0 ? "为每次远征留一份检查点" : tab == 1 ? "收录模组，整理游戏目录" : "把进度和模组带回游戏";
-        TextView heading = type(title, wide ? 39 : 34, INK, display);
+        String title = tab == 0 ? "存档书库" : tab == 1 ? "模组工坊" : tab == 2 ? "画面适配" : "使用指南";
+        String detail = tab == 0 ? "为每次远征留一份检查点"
+                : tab == 1 ? "直连管理已安装模组、档位排序与预设方案"
+                : tab == 2 ? "适配平板原生分辨率与全屏比例"
+                : "把进度、模组与高清画面带回游戏";
+        TextView heading = type(title, wide ? 37 : 32, INK, display);
         heading.setAccessibilityHeading(true);
         words.addView(heading);
         View accent = new View(this);
         accent.setBackgroundColor(GOLD);
         LinearLayout.LayoutParams accentParams = new LinearLayout.LayoutParams(dp(34), dp(2));
-        accentParams.topMargin = dp(9);
-        accentParams.bottomMargin = dp(11);
+        accentParams.topMargin = dp(8);
+        accentParams.bottomMargin = dp(10);
         words.addView(accent, accentParams);
         words.addView(type(detail, 15, MUTED, Typeface.DEFAULT));
-        int width = dp(wide ? 430 : 280);
+        int width = dp(wide ? 460 : 280);
         frame.addView(words, new FrameLayout.LayoutParams(width, -1, Gravity.START | Gravity.CENTER_VERTICAL));
         return frame;
     }
@@ -288,7 +349,7 @@ public final class MainActivity extends Activity {
             LinearLayout item = vertical();
             item.setGravity(Gravity.CENTER);
             item.setPadding(dp(3), dp(6), dp(3), dp(6));
-            item.setMinimumHeight(dp(62));
+            item.setMinimumHeight(dp(60));
             item.setBackground(pressable(active ? 0xff39231e : Color.TRANSPARENT, 0, 13));
             item.setContentDescription(TABS[i]);
             item.setSelected(active);
@@ -311,11 +372,16 @@ public final class MainActivity extends Activity {
         LinearLayout row = horizontal();
         if (tab == 0) {
             weighted(row, button("建立存档版本", true, this::chooseSaveInput), true);
-            weighted(row, button("怎样备份", false, () -> selectTab(2)), false);
+            weighted(row, button(live.available() ? "刷新自动存档" : "怎样备份", false,
+                    () -> { if (live.available()) refreshLive(true); else selectTab(3); }), false);
         } else {
             weighted(row, button("导入 Mod ZIP", true, () -> pickFile(MOD_ZIP)), true);
-            weighted(row, button(prefs.contains("mods") ? "刷新游戏目录" : "连接游戏目录", false,
-                    () -> { if (prefs.contains("mods")) refreshMods(true); else pickTree(MOD_TREE); }), false);
+            if (live.available()) {
+                weighted(row, button("刷新游戏模组", false, () -> refreshLive(true)), false);
+            } else {
+                weighted(row, button(prefs.contains("mods") ? "刷新游戏目录" : "连接游戏目录", false,
+                        () -> { if (prefs.contains("mods")) refreshMods(true); else pickTree(MOD_TREE); }), false);
+            }
         }
         return row;
     }
@@ -342,11 +408,98 @@ public final class MainActivity extends Activity {
         return block;
     }
 
+    private View modsLeftColumn() {
+        LinearLayout col = vertical();
+        if (live.available()) {
+            col.addView(slotModsSection());
+            add(col, presetSection(), 22);
+            add(col, modLibrary(), 22);
+        } else {
+            col.addView(modLibrary());
+        }
+        return col;
+    }
+
+    private View modsRightColumn() {
+        return live.available() ? liveInstalledMods() : installedMods();
+    }
+
+    private View slotModsSection() {
+        LinearLayout block = vertical();
+        heading(block, "档位模组配置", slotMods.size() + " 个存档位");
+        if (!liveModError.isEmpty()) {
+            add(block, empty("box", "暂时无法读取档位模组", liveModError), 10);
+            return block;
+        }
+        if (slotMods.isEmpty()) {
+            add(block, empty("book", "暂无存档槽位", "在实验版游戏中建立或导入存档后，可在这里直接管理启用模组与加载顺序。"), 10);
+            return block;
+        }
+        LinearLayout list = vertical();
+        list.setBackground(surface(PANEL, LINE, 13));
+        for (int i = 0; i < slotMods.size(); i++) {
+            LiveArchive.SlotMods slot = slotMods.get(i);
+            String detail = "已启用 " + slot.mods().size() + " 个模组"
+                    + (slot.steamCount() > 0 ? "  ·  含 " + slot.steamCount() + " 个 Steam 项待转本地" : "")
+                    + (slot.modified() > 0 ? "  ·  " + time(slot.modified()) : "");
+            list.addView(record("commit", slot.label(), detail, "配置", () -> openSlotModEditor(slot)));
+            if (i < slotMods.size() - 1) list.addView(rule());
+        }
+        add(block, list, 10);
+        add(block, type("修改档位模组前会自动备份一份档位快照，修改后完全退出游戏重启生效。", 13, MUTED, Typeface.DEFAULT), 8);
+        return block;
+    }
+
+    private View presetSection() {
+        LinearLayout block = vertical();
+        heading(block, "模组预设方案", presets.size() + " 套");
+        if (presets.isEmpty()) {
+            add(block, empty("box", "还没有保存预设", "点开上方任意档位配置，点击「存为预设」，即可一键复用整套模组与顺序。"), 10);
+            return block;
+        }
+        LinearLayout list = vertical();
+        list.setBackground(surface(PANEL, LINE, 13));
+        for (int i = 0; i < presets.size(); i++) {
+            ArchiveStore.ModPreset preset = presets.get(i);
+            String detail = preset.modIds().size() + " 个模组  ·  " + time(preset.date());
+            list.addView(record("box", preset.name(), detail, "应用", () -> presetActions(preset)));
+            if (i < presets.size() - 1) list.addView(rule());
+        }
+        add(block, list, 10);
+        return block;
+    }
+
+    private View liveInstalledMods() {
+        LinearLayout block = vertical();
+        heading(block, "已安装模组", gameMods.size() + " 个");
+        if (!liveModError.isEmpty()) {
+            add(block, empty("box", "连接实验版失败", liveModError), 10);
+            add(block, button("重试同步", false, () -> refreshLive(true)), 10);
+            return block;
+        }
+        if (gameMods.isEmpty()) {
+            add(block, empty("box", "游戏目录为空", "可在左侧「本地模组」中导入 ZIP 后直接安装到实验版游戏。"), 10);
+            return block;
+        }
+        LinearLayout list = vertical();
+        list.setBackground(surface(PANEL, LINE, 13));
+        for (int i = 0; i < gameMods.size(); i++) {
+            LiveArchive.GameMod mod = gameMods.get(i);
+            String ver = mod.version().isEmpty() ? "" : "v" + mod.version() + "  ·  ";
+            String detail = ver + mod.id() + "  ·  " + size(mod.bytes());
+            String tag = mod.prepared() ? "已就绪" : "待启动转换";
+            list.addView(record("box", mod.title(), detail, tag, () -> gameModActions(mod)));
+            if (i < gameMods.size() - 1) list.addView(rule());
+        }
+        add(block, list, 10);
+        return block;
+    }
+
     private View modLibrary() {
         LinearLayout block = vertical();
-        heading(block, "本地模组", mods.size() + " 个压缩包");
+        heading(block, "本地模组库", mods.size() + " 个压缩包");
         if (mods.isEmpty()) {
-            add(block, empty("box", "还没有收录模组", "选择一个 ZIP。支持带 project.xml 的模组和旧版目录结构。"), 10);
+            add(block, empty("box", "还没有收录模组", "点击「导入 Mod ZIP」收纳模组包，随后可直接一键安装到实验版游戏。"), 10);
             return block;
         }
         LinearLayout list = vertical();
@@ -354,7 +507,7 @@ public final class MainActivity extends Activity {
         for (int i = 0; i < mods.size(); i++) {
             ArchiveStore.Entry entry = mods.get(i);
             String second = size(entry.bytes()) + "  ·  " + entry.count() + " 个模组";
-            list.addView(record("box", entry.title(), second, "", () -> modDetails(entry)));
+            list.addView(record("box", entry.title(), second, live.available() ? "安装" : "", () -> modDetails(entry)));
             if (i < mods.size() - 1) list.addView(rule());
         }
         add(block, list, 10);
@@ -387,6 +540,91 @@ public final class MainActivity extends Activity {
         return block;
     }
 
+    private View displayPage(boolean wide) {
+        LinearLayout block = vertical();
+        if (!live.available()) {
+            add(block, empty("screen", "未检测到实验版游戏", "画面与平板分辨率控制需要安装带补丁的实验版游戏（dev.torcharchive.ddgame）。"), 0);
+            return block;
+        }
+        if (!liveDisplayError.isEmpty() || displayInfo == null) {
+            add(block, empty("screen", "无法读取画面配置", liveDisplayError.isEmpty() ? "请先启动一次新版实验游戏后再刷新。" : liveDisplayError), 0);
+            add(block, button("重新同步", true, () -> refreshLive(true)), 12);
+            return block;
+        }
+
+        LiveArchive.DisplayInfo info = displayInfo;
+        String screenRatio = aspectLabel(info.screenW(), info.screenH());
+        String curRatio = aspectLabel(info.width(), info.height());
+        String modeLabel = info.fillScreen() ? "全屏铺满（去黑边）" : "等比清晰（原比例）";
+
+        LinearLayout summary = vertical();
+        summary.setPadding(dp(18), dp(16), dp(18), dp(16));
+        summary.setBackground(surface(PANEL, LINE, 13));
+        summary.addView(type("当前设备与游戏画面", 17, INK, Typeface.DEFAULT_BOLD));
+        add(summary, type("平板物理屏幕：" + info.screenW() + " × " + info.screenH() + "（" + screenRatio + "）", 14, MUTED, Typeface.DEFAULT), 6);
+        add(summary, type("游戏当前设置：" + info.width() + " × " + info.height() + "（" + curRatio + "） · " + modeLabel, 14, GOLD, Typeface.DEFAULT_BOLD), 4);
+        add(summary, type("修改分辨率或画面模式后，完全退出实验版游戏并重新打开即生效。", 13, MUTED, Typeface.DEFAULT), 6);
+        block.addView(summary);
+
+        // Scaling mode toggle
+        LinearLayout modeRow = horizontal();
+        weighted(modeRow, button(info.fillScreen() ? "等比清晰（原比例）" : "✓ 等比清晰（原比例）", !info.fillScreen(),
+                () -> applyDisplay(info.width(), info.height(), false)), true);
+        weighted(modeRow, button(info.fillScreen() ? "✓ 全屏铺满（去黑边）" : "全屏铺满（去黑边）", info.fillScreen(),
+                () -> applyDisplay(info.width(), info.height(), true)), false);
+        add(block, modeRow, 14);
+
+        // Resolution presets
+        LinearLayout resBlock = vertical();
+        heading(resBlock, "分辨率档位", "点击即写入游戏配置");
+        Map<String, int[]> options = new LinkedHashMap<>();
+        Map<String, String> notes = new LinkedHashMap<>();
+        addResolutionOption(options, notes, info.screenW() & -2, info.screenH() & -2,
+                "设备原生 " + screenRatio + " 全屏（优先推荐，先实测画面是否无黑边）");
+        int fit16x9H = ((info.screenW() * 9) / 16) & -2;
+        if (fit16x9H >= 360 && fit16x9H <= 2560 && fit16x9H != (info.screenH() & -2)) {
+            addResolutionOption(options, notes, info.screenW() & -2, fit16x9H,
+                    "平板点对点 16:9（超清无变形；可搭配「全屏铺满」去黑边）");
+        }
+        addResolutionOption(options, notes, 2560, 1600, "2K 原生 16:10（清晰与帧率均衡）");
+        addResolutionOption(options, notes, 2560, 1440, "2K 标准 16:9（高清晰度）");
+        addResolutionOption(options, notes, 1920, 1080, "标准 1080p（原移植版默认）");
+        addResolutionOption(options, notes, 1280, 720, "省电 720p");
+
+        LinearLayout list = vertical();
+        list.setBackground(surface(PANEL, LINE, 13));
+        List<String> keys = new ArrayList<>(options.keySet());
+        for (int i = 0; i < keys.size(); i++) {
+            String key = keys.get(i);
+            int[] wh = options.get(key);
+            boolean selected = wh[0] == info.width() && wh[1] == info.height();
+            list.addView(record("screen", wh[0] + " × " + wh[1], notes.get(key), selected ? "当前" : "切换",
+                    () -> applyDisplay(wh[0], wh[1], info.fillScreen())));
+            if (i < keys.size() - 1) list.addView(rule());
+        }
+        add(resBlock, list, 10);
+        add(block, resBlock, 22);
+        return block;
+    }
+
+    private void addResolutionOption(Map<String, int[]> options, Map<String, String> notes, int w, int h, String desc) {
+        if (w < 640 || w > 4096 || h < 360 || h > 2560) return;
+        String key = w + "x" + h;
+        if (!options.containsKey(key)) {
+            options.put(key, new int[]{w, h});
+            notes.put(key, desc);
+        }
+    }
+
+    private void applyDisplay(int width, int height, boolean fillScreen) {
+        perform("正在写入画面配置…", () -> live.setDisplay(width, height, fillScreen), updated -> {
+            displayInfo = updated;
+            noteRestore = true;
+            message("已设为 " + updated.width() + "×" + updated.height()
+                    + (updated.fillScreen() ? "（全屏铺满）" : "（等比清晰）") + "。完全退出实验版游戏后重启生效。");
+        });
+    }
+
     private View restoreGuide() {
         LinearLayout block = vertical();
         heading(block, "回档", "");
@@ -404,13 +642,252 @@ public final class MainActivity extends Activity {
             add(block, guideItem("restore", "恢复自动版本", "选择版本并确认回档，完全退出实验版游戏后再打开。档案馆会显示游戏确认的结果。"), 8);
         }
         add(block, guideItem("export", "从游戏导出", "游戏 → 存档与模组 → 存档 → 导出。选择一个目录，游戏会创建 DarkestDungeon saves 文件夹。"), 10);
-        add(block, guideItem("commit", "建立版本", "返回档案馆，在存档页导入刚导出的文件夹或存档 ZIP。每次导入都会保留为独立版本。"), 8);
-        add(block, guideItem("restore", "回到旧进度", "点开历史版本，选全部或单个档位。准备好回档目录后，在游戏的存档菜单导入该目录，再选要恢复的档位。"), 8);
-        add(block, type("模组管理", 23, INK, display), 24);
-        add(block, guideItem("box", "收录并导入游戏", "在模组页收录 ZIP。用“导出 ZIP”保存到设备，然后从游戏的模组菜单导入。游戏会转换部分旧版素材。"), 10);
-        add(block, guideItem("link", "连接已安装目录",
-                "从系统文件选择器选对应游戏在 Android/media 下的 mods 目录。各档位的启用和顺序在游戏内设置。"), 8);
+        add(block, type("模组与画面", 23, INK, display), 24);
+        add(block, guideItem("box", "直连管理实验版模组", "在模组页可一键将本地 ZIP 安装到游戏目录、卸载无用模组，并直接勾选各档位的启用列表与加载优先级。"), 10);
+        add(block, guideItem("screen", "平板高分与去黑边", "在画面页可切换 3008×1880 / 2560×1600 / 3008×1692 等高分档位，并可切换等比清晰或全屏铺满模式。"), 8);
         return block;
+    }
+
+    private void openSlotModEditor(LiveArchive.SlotMods slot) {
+        if (busy) return;
+        Map<String, LiveArchive.GameMod> installedMap = new HashMap<>();
+        for (LiveArchive.GameMod gm : gameMods) installedMap.put(gm.id(), gm);
+
+        // Ordered list of enabled mod IDs (preserving existing priority order)
+        List<String> enabledOrder = new ArrayList<>();
+        Set<String> enabledSet = new HashSet<>();
+        for (LiveArchive.SlotMod sm : slot.mods()) {
+            if (enabledSet.add(sm.name())) enabledOrder.add(sm.name());
+        }
+        // Build full editable list: enabled first (in priority order), then disabled installed mods
+        List<String> allIds = new ArrayList<>(enabledOrder);
+        for (LiveArchive.GameMod gm : gameMods) {
+            if (!enabledSet.contains(gm.id())) allIds.add(gm.id());
+        }
+
+        LinearLayout container = vertical();
+        container.setPadding(dp(16), dp(10), dp(16), dp(6));
+
+        // Quick helper buttons row
+        LinearLayout tools = horizontal();
+        Button btnAll = (Button) button("全选本地", false, () -> {});
+        Button btnSavePreset = (Button) button("存为预设", false, () -> {});
+        Button btnApplyPreset = (Button) button("套用预设", false, () -> {});
+        LinearLayout.LayoutParams tp1 = new LinearLayout.LayoutParams(0, -2, 1);
+        tp1.setMarginEnd(dp(6));
+        LinearLayout.LayoutParams tp2 = new LinearLayout.LayoutParams(0, -2, 1);
+        tp2.setMarginEnd(dp(6));
+        tools.addView(btnAll, tp1);
+        tools.addView(btnSavePreset, tp2);
+        tools.addView(btnApplyPreset, new LinearLayout.LayoutParams(0, -2, 1));
+        container.addView(tools);
+
+        TextView hint = type("排在越靠上的模组优先级越高（例如扩展包应排在主包上方）。保存时会自动转为本地 mod 标识并先备份当前档位。", 12, MUTED, Typeface.DEFAULT);
+        add(container, hint, 8);
+
+        ScrollView listScroll = new ScrollView(this);
+        LinearLayout listLayout = vertical();
+        listScroll.addView(listLayout);
+        LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(-1, dp(340));
+        scrollLp.topMargin = dp(8);
+        container.addView(listScroll, scrollLp);
+
+        Runnable[] renderRef = new Runnable[1];
+        renderRef[0] = () -> {
+            listLayout.removeAllViews();
+            if (allIds.isEmpty()) {
+                listLayout.addView(type("当前没有已安装的模组。", 14, MUTED, Typeface.DEFAULT));
+                return;
+            }
+            for (int i = 0; i < allIds.size(); i++) {
+                final int idx = i;
+                final String modId = allIds.get(i);
+                final boolean checked = enabledSet.contains(modId);
+                LiveArchive.GameMod meta = installedMap.get(modId);
+                String title = meta != null ? meta.title() : (modId + "（未安装）");
+
+                LinearLayout row = horizontal();
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setPadding(dp(4), dp(6), dp(4), dp(6));
+
+                CheckBox cb = new CheckBox(this);
+                cb.setChecked(checked);
+                cb.setText(title);
+                cb.setTextColor(meta != null ? INK : ERROR);
+                cb.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+                cb.setOnCheckedChangeListener((btn, isChecked) -> {
+                    if (isChecked) enabledSet.add(modId);
+                    else enabledSet.remove(modId);
+                });
+                row.addView(cb, new LinearLayout.LayoutParams(0, -2, 1));
+
+                Button up = smallBtn("↑", idx > 0, () -> {
+                    Collections.swap(allIds, idx, idx - 1);
+                    renderRef[0].run();
+                });
+                Button down = smallBtn("↓", idx < allIds.size() - 1, () -> {
+                    Collections.swap(allIds, idx, idx + 1);
+                    renderRef[0].run();
+                });
+                LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(dp(40), dp(36));
+                blp.setMarginStart(dp(4));
+                row.addView(up, blp);
+                row.addView(down, blp);
+
+                listLayout.addView(row);
+                if (i < allIds.size() - 1) listLayout.addView(rule());
+            }
+        };
+        renderRef[0].run();
+
+        btnAll.setOnClickListener(v -> {
+            for (LiveArchive.GameMod gm : gameMods) {
+                if (!allIds.contains(gm.id())) allIds.add(gm.id());
+                enabledSet.add(gm.id());
+            }
+            renderRef[0].run();
+        });
+
+        btnSavePreset.setOnClickListener(v -> {
+            List<String> chosen = new ArrayList<>();
+            for (String id : allIds) if (enabledSet.contains(id)) chosen.add(id);
+            promptSavePreset(chosen);
+        });
+
+        btnApplyPreset.setOnClickListener(v -> {
+            if (presets.isEmpty()) {
+                error("还没有已保存的模组预设。");
+                return;
+            }
+            String[] names = new String[presets.size()];
+            for (int i = 0; i < presets.size(); i++) {
+                names[i] = presets.get(i).name() + "（" + presets.get(i).modIds().size() + " 个）";
+            }
+            new AlertDialog.Builder(this).setTitle("选择要套用的预设")
+                    .setItems(names, (d, which) -> {
+                        ArchiveStore.ModPreset preset = presets.get(which);
+                        enabledSet.clear();
+                        allIds.clear();
+                        for (String id : preset.modIds()) {
+                            if (enabledSet.add(id)) allIds.add(id);
+                        }
+                        for (LiveArchive.GameMod gm : gameMods) {
+                            if (!enabledSet.contains(gm.id())) allIds.add(gm.id());
+                        }
+                        renderRef[0].run();
+                    }).setNegativeButton("取消", null).show();
+        });
+
+        new AlertDialog.Builder(this)
+                .setTitle(slot.label() + " · 模组启用与排序")
+                .setView(container)
+                .setPositiveButton("保存并自动备份", (dialog, which) -> {
+                    List<LiveArchive.SlotMod> result = new ArrayList<>();
+                    for (String id : allIds) {
+                        if (enabledSet.contains(id)) {
+                            result.add(new LiveArchive.SlotMod(id, "mod"));
+                        }
+                    }
+                    perform("正在备份档位并写入模组配置…", () -> {
+                        live.setSlotMods(slot.slot(), result);
+                        return fetchLiveSnapshot();
+                    }, snap -> {
+                        applyLiveSnapshot(snap);
+                        noteRestore = true;
+                        message("已更新 " + slot.label() + "（启用 " + result.size() + " 个模组，原档已自动快照）。完全退出游戏重启生效。");
+                    });
+                })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    private Button smallBtn(String label, boolean enabled, Runnable click) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setEnabled(enabled);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        b.setTextColor(enabled ? GOLD : MUTED);
+        b.setPadding(0, 0, 0, 0);
+        b.setMinimumWidth(0);
+        b.setMinimumHeight(0);
+        b.setBackground(pressable(RAISED, LINE, 8));
+        b.setOnClickListener(v -> click.run());
+        return b;
+    }
+
+    private void promptSavePreset(List<String> modIds) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint("例如：日出群岛+全皮肤");
+        input.setFilters(new InputFilter[]{new InputFilter.LengthFilter(60)});
+        FrameLayout box = new FrameLayout(this);
+        box.setPadding(dp(24), dp(8), dp(24), 0);
+        box.addView(input, new FrameLayout.LayoutParams(-1, -2));
+        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("保存为模组预设（" + modIds.size() + " 个）")
+                .setView(box).setPositiveButton("保存", null).setNegativeButton("取消", null).create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String name = input.getText().toString().trim();
+            if (name.isEmpty()) { input.setError("请输入预设名称"); return; }
+            dialog.dismiss();
+            perform("正在保存预设…", () -> store.savePreset(name, modIds), saved -> {
+                updateLists();
+                message("预设「" + saved.name() + "」已保存");
+            });
+        }));
+        dialog.show();
+    }
+
+    private void presetActions(ArchiveStore.ModPreset preset) {
+        List<String> actions = new ArrayList<>();
+        if (live.available() && !slotMods.isEmpty()) {
+            for (LiveArchive.SlotMods slot : slotMods) actions.add("套用到 " + slot.label());
+        }
+        actions.add("删除此预设");
+        new AlertDialog.Builder(this).setTitle(preset.name() + "（" + preset.modIds().size() + " 个模组）")
+                .setItems(actions.toArray(new String[0]), (d, choice) -> {
+                    if (live.available() && choice < slotMods.size()) {
+                        LiveArchive.SlotMods target = slotMods.get(choice);
+                        List<LiveArchive.SlotMod> payload = new ArrayList<>();
+                        for (String id : preset.modIds()) payload.add(new LiveArchive.SlotMod(id, "mod"));
+                        perform("正在套用预设到 " + target.label() + "…", () -> {
+                            live.setSlotMods(target.slot(), payload);
+                            return fetchLiveSnapshot();
+                        }, snap -> {
+                            applyLiveSnapshot(snap);
+                            noteRestore = true;
+                            message("已将「" + preset.name() + "」套用到 " + target.label() + "，完全退出游戏重启生效。");
+                        });
+                    } else {
+                        perform("正在删除预设…", () -> { store.deletePreset(preset.id()); return preset; },
+                                done -> { updateLists(); message("预设已删除"); });
+                    }
+                }).setNegativeButton("取消", null).show();
+    }
+
+    private void gameModActions(LiveArchive.GameMod mod) {
+        String info = "目录 ID：" + mod.id()
+                + (mod.version().isEmpty() ? "" : "\n版本：" + mod.version())
+                + "\n格式：" + mod.format()
+                + "\n文件：" + mod.files() + " 个  ·  " + size(mod.bytes())
+                + "\n移植转换：" + (mod.prepared() ? "已完成（.port-switch）" : "待游戏下次启动自动转换");
+        new AlertDialog.Builder(this).setTitle(mod.title())
+                .setMessage(info)
+                .setPositiveButton("关闭", null)
+                .setNegativeButton("从游戏卸载", (d, w) -> confirmDeleteGameMod(mod))
+                .show();
+    }
+
+    private void confirmDeleteGameMod(LiveArchive.GameMod mod) {
+        new AlertDialog.Builder(this).setTitle("卸载模组？")
+                .setMessage("将从实验版游戏目录删除「" + mod.title() + "」（" + mod.id() + "）。此操作不会删除档案馆内的本地 ZIP 备份。")
+                .setPositiveButton("确认卸载", (d, w) -> perform("正在卸载模组…", () -> {
+                    live.deleteMod(mod.id());
+                    return fetchLiveSnapshot();
+                }, snap -> {
+                    applyLiveSnapshot(snap);
+                    message("已卸载「" + mod.title() + "」");
+                }))
+                .setNegativeButton("取消", null).show();
     }
 
     private View guideItem(String icon, String title, String detail) {
@@ -450,7 +927,7 @@ public final class MainActivity extends Activity {
     private View record(String icon, String title, String detail, String aside, Runnable action) {
         LinearLayout row = horizontal();
         row.setPadding(dp(14), dp(11), dp(14), dp(11));
-        row.setMinimumHeight(dp(66));
+        row.setMinimumHeight(dp(64));
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setBackground(pressable(Color.TRANSPARENT, 0, 12));
         row.setFocusable(true);
@@ -492,7 +969,7 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
         lp.setMarginStart(dp(10));
         row.addView(message, lp);
-        if (noteRestore) row.addView(button("打开游戏", false, this::openGame));
+        if (noteRestore) row.addView(button(live.available() ? "打开实验版" : "打开游戏", false, this::openGame));
         return row;
     }
 
@@ -547,7 +1024,7 @@ public final class MainActivity extends Activity {
                         return entry;
                     }, accepted -> {
                         message("已准备回档。请完全退出实验版游戏后重新打开。");
-                        refreshAutomatic();
+                        refreshLive(false);
                     }))
                     .setNegativeButton("取消", null).show();
             return;
@@ -589,11 +1066,28 @@ public final class MainActivity extends Activity {
     }
 
     private void modDetails(ArchiveStore.Entry entry) {
-        new AlertDialog.Builder(this).setTitle(entry.title())
-                .setMessage(entry.source() + "\n" + size(entry.bytes()) + "  ·  " + entry.count() + " 个模组\n\n导出 ZIP 后，在游戏的模组菜单中导入。")
-                .setPositiveButton("导出 ZIP", (d,b) -> chooseZipOut(entry))
-                .setNeutralButton("更多操作", (d,b) -> entryActions(entry))
-                .setNegativeButton("关闭", null).show();
+        AlertDialog.Builder builder = new AlertDialog.Builder(this).setTitle(entry.title())
+                .setMessage(entry.source() + "\n" + size(entry.bytes()) + "  ·  " + entry.count() + " 个模组"
+                        + (live.available() ? "\n\n可直接安装到实验版游戏目录，下次重启游戏自动转换生效。" : "\n\n导出 ZIP 后，在游戏的模组菜单中导入。"))
+                .setNeutralButton("更多操作", (d, b) -> entryActions(entry))
+                .setNegativeButton("关闭", null);
+        if (live.available()) {
+            builder.setPositiveButton("直接安装到实验版", (d, b) -> perform("正在解压并安装模组到实验版…", () -> {
+                int count;
+                try (InputStream in = store.openPayload(entry)) {
+                    count = live.installMod(in, store.zipName(entry));
+                }
+                return new Object[]{count, fetchLiveSnapshot()};
+            }, res -> {
+                int count = (Integer) res[0];
+                applyLiveSnapshot((LiveSnapshot) res[1]);
+                noteRestore = true;
+                message("已直接安装 " + count + " 个模组到实验版游戏！可在「档位模组配置」启用后重启游戏。");
+            }));
+        } else {
+            builder.setPositiveButton("导出 ZIP", (d, b) -> chooseZipOut(entry));
+        }
+        builder.show();
     }
 
     private void entryActions(ArchiveStore.Entry entry) {
@@ -640,7 +1134,7 @@ public final class MainActivity extends Activity {
 
     private void confirmArchiveMod(ArchiveStore.Installed mod) {
         new AlertDialog.Builder(this).setTitle(mod.title()).setMessage("把游戏目录里的这份 Mod 保存为本地 ZIP 副本。")
-                .setPositiveButton("备份到档案馆", (d,b) -> perform("正在备份已安装模组…", () -> store.archiveInstalled(mod),
+                .setPositiveButton("备份到档案馆", (d, b) -> perform("正在备份已安装模组…", () -> store.archiveInstalled(mod),
                         saved -> { updateLists(); message("模组备份已保存"); }))
                 .setNegativeButton("取消", null).show();
     }
@@ -683,7 +1177,7 @@ public final class MainActivity extends Activity {
                     saved -> { updateLists(); message("已建立版本 · " + saved.count() + " 个档位"); });
         } else if (request == MOD_ZIP) {
             perform("正在检查模组结构…", () -> store.importMod(uri),
-                    saved -> { updateLists(); message("模组已收录 · " + saved.count() + " 个"); });
+                    saved -> { updateLists(); message("模组已收录 · " + saved.count() + " 个（点开条目可直接安装到实验版）"); });
         } else if (request == MOD_TREE) {
             perform("正在读取游戏目录…", () -> {
                 List<ArchiveStore.Installed> found = store.installed(uri);
@@ -749,6 +1243,7 @@ public final class MainActivity extends Activity {
         saves.addAll(automatic);
         saves.sort(Comparator.comparingLong(ArchiveStore.Entry::date).reversed());
         mods = store.list(ArchiveStore.MOD);
+        presets = store.listPresets();
     }
 
     private interface Work<T> { T call() throws Exception; }
@@ -883,6 +1378,15 @@ public final class MainActivity extends Activity {
 
     private static String slotLabel(String id) { return "档位 " + (Integer.parseInt(id.substring(8)) + 1); }
 
+    private static String aspectLabel(int w, int h) {
+        if (h <= 0) return "";
+        double r = (double) w / h;
+        if (Math.abs(r - 16.0 / 9.0) < 0.02) return "16:9";
+        if (Math.abs(r - 16.0 / 10.0) < 0.02) return "16:10";
+        if (Math.abs(r - 4.0 / 3.0) < 0.02) return "4:3";
+        return String.format(Locale.ROOT, "%.2f:1", r);
+    }
+
     private final class Glyph extends View {
         private final Paint pen = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final String kind;
@@ -910,6 +1414,11 @@ public final class MainActivity extends Activity {
                 case "box":
                     line(canvas, 3,7, 12,3, 21,7, 21,17, 12,21, 3,17, 3,7, 12,11, 21,7);
                     line(canvas, 12,11, 12,21); line(canvas, 7.5f,5, 16.5f,9, 16.5f,13);
+                    break;
+                case "screen":
+                    line(canvas, 3,5, 21,5, 21,16, 3,16, 3,5);
+                    line(canvas, 9,20, 15,20);
+                    line(canvas, 12,16, 12,20);
                     break;
                 case "commit":
                     line(canvas, 12,2, 12,6); line(canvas, 12,18, 12,22);

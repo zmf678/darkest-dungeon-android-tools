@@ -98,6 +98,11 @@ final class SnapshotStore {
         return captured;
     }
 
+    String backup(Path profile) throws IOException {
+        if (!validProfile(profile)) throw new IOException("Target profile is invalid");
+        return publish(profile, true);
+    }
+
     private String publish(Path profile, boolean force) throws IOException {
         String slot = profile.getFileName().toString();
         Path temp = Files.createTempFile(history, ".capture-", ".zip");
