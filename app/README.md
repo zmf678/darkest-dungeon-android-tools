@@ -2,7 +2,7 @@
 
 > 返回导航：[工作区总索引](../INDEX.md) · [系统架构](../docs/ARCHITECTURE.md) · [修改器指南](../docs/MODIFIER-GUIDE.md) · [构建测试指南](../docs/BUILD-AND-TEST.md)
 
-`app/` 为「暗黑地牢 · 余烬启动器（v2.1.0）」原创 Android 客户端工程源码（`applicationId = "dev.torcharchive.ddgame"`，`minSdk 26`，`targetSdk 36`），同时承担**桌面统一启动入口、外置数据包直读挂载、全机型分辨率与高刷适配、自动留档回档、Steam 迁移/模组管理与内置完整修改器**六大职责。
+`app/` 为「暗黑地牢 · 余烬启动器（v2.3.0）」原创 Android 客户端工程源码（`applicationId = "dev.torcharchive.ddgame"`，`minSdk 26`，`targetSdk 36`），提供统一启动入口、外置数据包挂载、分辨率与高刷设置、自动留档回档、联网模组工坊与内置修改器。
 
 ---
 
@@ -16,6 +16,8 @@
 | [LiveArchive.java](src/main/java/dev/torcharchive/dd/LiveArchive.java) | 同 UID 直连门面：直接桥接当前应用内沙盒数据与 `:nx` 子进程控制，统一协调回档、Mod 导入启停、分辨率切换与状态刷新 |
 | [ModifierSection.java](src/main/java/dev/torcharchive/dd/ModifierSection.java) | 「修改」页签控制器：提供庄园与钱包、英雄嵌套 DSON 属性/怪癖、饰品图鉴增删、城镇建筑一键解锁、原始 DSON 树编辑器与非破坏性规则修改器界面 |
 | [ArchiveStore.java](src/main/java/dev/torcharchive/dd/ArchiveStore.java) | 本地存档仓与模组预设仓：支持手动导入档位 ZIP、查看自动留档列表、保存/导出与管理本地 Mod ZIP 预设 |
+| [WorkshopSection.java](src/main/java/dev/torcharchive/dd/WorkshopSection.java) | 原生工坊搜索、详情、下载进度及公开 ZIP 入口，适配手机单列和平板双列 |
+| [WorkshopClient.java](src/main/java/dev/torcharchive/dd/WorkshopClient.java) | 读取 Steam 公开工坊页面与条目详情，通过 HTTPS 下载公开 ZIP |
 
 ### 2. 游戏引擎接入、存档与修改内核（`src/main/java/dev/torcharchive/game/`）
 

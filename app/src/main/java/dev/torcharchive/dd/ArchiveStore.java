@@ -65,6 +65,7 @@ final class ArchiveStore {
     record ModFormat(int roots, boolean legacy, String title) {}
     record Slot(String name, int files, String change) {}
     record ModPreset(String id, String name, List<String> modIds, long date) {}
+    record ModFile(String path, long bytes) {}
 
     private final File library, cache, presetsFile;
     private final ContentResolver resolver;
@@ -122,19 +123,34 @@ final class ArchiveStore {
             try (InputStream in = openIn(uri); OutputStream out = new FileOutputStream(archive)) {
                 copy(in, out, new Budget());
             }
-            File input = new File(job, "input");
-            mkdir(input);
-            unzip(new FileInputStream(archive), input);
             String source = displayName(uri, false);
-            ModFormat format = inspectMod(input, 0);
-            if (format.roots == 0) throw new IOException("ZIP 里找不到 project.xml 或游戏支持的旧版模组目录。");
-            return publish(MOD, format.roots == 1 && !format.title.trim().isEmpty() ? format.title : stripZip(source),
-                    source + (format.legacy ? " · 含旧版目录" : ""), format.roots, out -> {
-                        try (InputStream in = new FileInputStream(archive)) { copy(in, out, null); }
-                    });
+            return importModArchive(archive, new File(job, "input"), stripZip(source), source);
         } finally {
             deleteTree(job);
         }
+    }
+
+    Entry importOnlineMod(File archive, String title, String source) throws Exception {
+        try (ZipFile zip = new ZipFile(archive)) {
+            if (zip.size() > MAX_FILES) throw new IOException("ZIP 文件数量超过支持范围。");
+        }
+        File job = temporary();
+        try {
+            return importModArchive(archive, new File(job, "input"), title, source);
+        } finally {
+            deleteTree(job);
+        }
+    }
+
+    private Entry importModArchive(File archive, File input, String title, String source) throws Exception {
+        mkdir(input);
+        unzip(new FileInputStream(archive), input);
+        ModFormat format = inspectMod(input, 0);
+        if (format.roots == 0) throw new IOException("ZIP 里找不到 project.xml 或游戏支持的旧版模组目录。");
+        String name = format.roots == 1 && !format.title.trim().isEmpty() ? format.title : title;
+        return publish(MOD, name, source + (format.legacy ? " · 含旧版目录" : ""), format.roots, out -> {
+            try (InputStream in = new FileInputStream(archive)) { copy(in, out, null); }
+        });
     }
 
     Entry archiveInstalled(Installed mod) throws Exception {
@@ -277,6 +293,20 @@ final class ArchiveStore {
 
     InputStream openPayload(Entry entry) throws IOException {
         return new FileInputStream(payload(entry));
+    }
+
+    List<ModFile> modFiles(Entry entry) throws IOException {
+        List<ModFile> result = new ArrayList<>();
+        try (ZipFile zip = new ZipFile(payload(entry))) {
+            if (zip.size() > MAX_FILES) throw new IOException("ZIP 文件数量超过支持范围。");
+            var files = zip.entries();
+            while (files.hasMoreElements()) {
+                ZipEntry file = files.nextElement();
+                if (!file.isDirectory()) result.add(new ModFile(file.getName(), file.getSize()));
+            }
+        }
+        result.sort(Comparator.comparing(ModFile::path, String.CASE_INSENSITIVE_ORDER));
+        return result;
     }
 
     List<ModPreset> listPresets() {
@@ -547,6 +577,7 @@ final class ArchiveStore {
                 File target = folder;
                 for (String part : parts) target = new File(target, component(part));
                 if (entry.isDirectory()) {
+                    if (zip.read() != -1) throw new IOException("ZIP 的目录条目含有文件数据。");
                     mkdir(target);
                 } else {
                     if (target.exists()) throw new IOException("ZIP 包含冲突的文件名。");

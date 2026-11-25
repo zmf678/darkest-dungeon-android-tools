@@ -1,4 +1,4 @@
-# Darkest Dungeon Android Tools — Torch Launcher & Steam Companion Toolchain (v2.1)
+# Darkest Dungeon Android Tools — Torch Launcher & Steam Companion Toolchain (v2.3)
 
 [简体中文](README.md) | **English**
 
@@ -50,6 +50,9 @@
   - Supports **Aspect-Fit (Crisp)** vs **Full-Screen Fill**, display cutout avoidance, and **60 Hz / 90 Hz / 120 Hz / Auto Max** refresh-rate selection;
   - Defaults ultrawide phones (`> 1.85:1`) to undistorted native-height 16:9 while keeping native full-screen framing on 16:10 tablets.
 - **Automatic Save Snapshots & Atomic Rollback (`SnapshotStore`)**: Captures versioned save snapshots automatically on save commits and lets you atomically roll back to any prior point in one tap.
+- **Online Mod Workshop**: Browse the Darkest Dungeon Steam Workshop from the Android Mods tab, sort by trending, top rated, or most recent, and search by name, description, or Workshop link. The launcher can download publicly available ZIPs into the local library, including author-provided HTTPS links in the Public ZIP section. Inspect the archive file list before installing.
+
+For subscription-only items, subscribe in the desktop Steam client and ZIP the entire `steamapps/workshop/content/262060/<item ID>` folder. Import the ZIP from Local Mods, or use a Steam migration bundle to transfer saves as well. Enable installed mods in the desired save slot.
 
 ### 2. PC Steam Asset Converter & Migration Suite (`dd-steam-converter/`)
 - **Automatic Steam Discovery**: Scans Windows Registry and `libraryfolders.vdf` to detect the base *Darkest Dungeon* install, owned DLCs, Workshop mods (`262060`), and `userdata` save slots.

@@ -58,9 +58,9 @@ import dev.torcharchive.game.PakMount;
 import dev.torcharchive.game.SaveEditor;
 
 public final class MainActivity extends Activity implements ModifierSection.Host {
-    private static final int BG = 0xff151111, PANEL = 0xff211918, RAISED = 0xff2b201e;
-    private static final int INK = 0xfff5e6d4, MUTED = 0xffc1a897, GOLD = 0xffe1ab71, LINE = 0xff543c32;
-    private static final int RED = 0xff733029, ERROR = 0xffffb3a3, GREEN = 0xffc5cb9e;
+    static final int BG = 0xff151111, PANEL = 0xff211918, RAISED = 0xff2b201e;
+    static final int INK = 0xfff5e6d4, MUTED = 0xffc1a897, GOLD = 0xffe1ab71, LINE = 0xff543c32;
+    static final int RED = 0xff733029, ERROR = 0xffffb3a3, GREEN = 0xffc5cb9e;
     private static final int SAVE_TREE = 11, SAVE_ZIP = 12, MOD_ZIP = 13, MOD_TREE = 14, ZIP_OUT = 15,
             RESTORE_TREE = 16, PAK_FILE = 17, MIGRATION_ZIP = 18;
     private static final String[] TABS = {"启动", "存档", "修改", "模组", "画面", "指南"};
@@ -72,6 +72,8 @@ public final class MainActivity extends Activity implements ModifierSection.Host
     private ArchiveStore store;
     private LiveArchive live;
     private ModifierSection modifierSection;
+    private WorkshopSection workshop;
+    private boolean workshopOpen;
     private SharedPreferences prefs;
     private FrameLayout outer;
     private Typeface display;
@@ -113,8 +115,11 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         modifierSection = new ModifierSection(this, this);
         prefs = getSharedPreferences("folders", MODE_PRIVATE);
         display = Typeface.createFromAsset(getAssets(), "display.ttf");
+        workshop = new WorkshopSection(this, store, display);
         if (saved != null) {
             tab = saved.getInt("tab");
+            workshopOpen = saved.getBoolean("workshopOpen");
+            workshop.selectMode(saved.getBoolean("workshopDirect"));
             pendingId = saved.getString("pending");
             pendingSlot = saved.getString("slot");
         }
@@ -214,6 +219,8 @@ public final class MainActivity extends Activity implements ModifierSection.Host
     }
 
     @Override protected void onSaveInstanceState(Bundle state) {
+        state.putBoolean("workshopOpen", workshopOpen);
+        state.putBoolean("workshopDirect", workshop.isDirectMode());
         state.putInt("tab", tab);
         state.putString("pending", pendingId);
         state.putString("slot", pendingSlot);
@@ -226,6 +233,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
     }
 
     @Override protected void onDestroy() {
+        workshop.close();
         if (android.os.Build.VERSION.SDK_INT >= 33 && backCallback != null) {
             try {
                 getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
@@ -239,10 +247,11 @@ public final class MainActivity extends Activity implements ModifierSection.Host
 
     private void syncBackCallback() {
         if (android.os.Build.VERSION.SDK_INT < 33) return;
-        boolean need = (tab == 2 && modifierSection.isInSubPage());
+        boolean need = (tab == 2 && modifierSection.isInSubPage())
+                || (tab == 3 && workshopOpen && workshop.hasDetail());
         if (need && backCallback == null) {
             android.window.OnBackInvokedCallback cb = () -> {
-                if (tab == 2 && modifierSection.handleBack()) return;
+                if (handleSectionBack()) return;
                 syncBackCallback();
             };
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
@@ -253,6 +262,20 @@ public final class MainActivity extends Activity implements ModifierSection.Host
                     (android.window.OnBackInvokedCallback) backCallback);
             backCallback = null;
         }
+    }
+
+    // Legacy callback for Android 12 and earlier. Android 13+ uses the dispatcher above.
+    @Override @SuppressWarnings("deprecation") @android.annotation.SuppressLint("GestureBackNavigation")
+    public void onBackPressed() {
+        if (android.os.Build.VERSION.SDK_INT >= 33 || !handleSectionBack()) super.onBackPressed();
+    }
+
+    private boolean handleSectionBack() {
+        if (tab == 3 && workshopOpen && workshop.hasDetail()) {
+            workshop.back();
+            return true;
+        }
+        return tab == 2 && modifierSection.handleBack();
     }
 
     private void reload() {
@@ -303,8 +326,11 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         int available = getResources().getDisplayMetrics().widthPixels - (wide ? dp(96) : 0);
         centered.addView(page, new FrameLayout.LayoutParams(Math.min(available, dp(1080)), -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL));
         boolean inModifierSub = (tab == 2 && modifierSection.isInSubPage());
-        if (!inModifierSub) {
-            page.addView(hero(wide), new LinearLayout.LayoutParams(-1, dp(wide ? 210 : 178)));
+        boolean inWorkshopDetail = tab == 3 && workshopOpen && workshop.hasDetail();
+        if (!inModifierSub && !inWorkshopDetail) {
+            boolean compact = tab == 3;
+            int heroHeight = compact ? (wide ? 116 : 112) : (wide ? 210 : 178);
+            page.addView(hero(wide, compact), new LinearLayout.LayoutParams(-1, dp(heroHeight)));
         }
         if (busy || !note.isEmpty()) add(page, feedback(), inModifierSub ? 0 : 14);
 
@@ -327,6 +353,11 @@ public final class MainActivity extends Activity implements ModifierSection.Host
             }
             case 2 -> add(page, modifierSection.buildView(wide, display), inModifierSub ? (busy || !note.isEmpty() ? 10 : 0) : 18);
             case 3 -> {
+                if (!inWorkshopDetail) add(page, modNavigation(), 14);
+                if (workshopOpen) {
+                    add(page, workshop.build(wide), inWorkshopDetail ? 0 : 14);
+                    break;
+                }
                 add(page, actions(), 14);
                 if (wide) {
                     LinearLayout columns = horizontal();
@@ -386,7 +417,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         return top;
     }
 
-    private View hero(boolean wide) {
+    private View hero(boolean wide, boolean compact) {
         FrameLayout frame = new FrameLayout(this);
         frame.setBackground(surface(PANEL, LINE, 14));
         frame.setForeground(surface(Color.TRANSPARENT, LINE, 14));
@@ -404,7 +435,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         frame.addView(shade, new FrameLayout.LayoutParams(-1, -1));
 
         LinearLayout words = vertical();
-        words.setPadding(dp(wide ? 28 : 20), dp(18), dp(18), dp(18));
+        words.setPadding(dp(wide ? 28 : 20), dp(compact ? 9 : 18), dp(18), dp(compact ? 9 : 18));
         words.setGravity(Gravity.CENTER_VERTICAL);
         String title = switch (tab) {
             case 0 -> "点亮火把";
@@ -418,20 +449,21 @@ public final class MainActivity extends Activity implements ModifierSection.Host
             case 0 -> "一体化薄壳启动器 · 外置数据包直读与 Steam 迁移";
             case 1 -> "同 UID 直连免拦截 · 自动留档与一键回档";
             case 2 -> "全字段二进制存档精修 · 二级详情页与规则 Mod 工坊";
-            case 3 -> "直装 Mod ZIP · 档位加载顺序与预设方案";
+            case 3 -> "浏览 Steam 创意工坊，下载与管理模组";
             case 4 -> "动态探测任意设备分辨率 · 支持 60 / 90 / 120 Hz 高刷适配";
             default -> "Steam 转安卓步骤 · 数据包路径与高级工具";
         };
-        TextView heading = type(title, wide ? 36 : 30, INK, display);
+        TextView heading = type(title, compact ? (wide ? 30 : 26) : (wide ? 36 : 30), INK, display);
         if (android.os.Build.VERSION.SDK_INT >= 28) heading.setAccessibilityHeading(true);
+        if (compact) heading.setIncludeFontPadding(false);
         words.addView(heading);
         View accent = new View(this);
         accent.setBackgroundColor(GOLD);
         LinearLayout.LayoutParams accentParams = new LinearLayout.LayoutParams(dp(34), dp(2));
         accentParams.topMargin = dp(8);
         accentParams.bottomMargin = dp(10);
-        words.addView(accent, accentParams);
-        words.addView(type(detail, 14, MUTED, Typeface.DEFAULT));
+        if (!compact) words.addView(accent, accentParams);
+        add(words, type(detail, 14, MUTED, Typeface.DEFAULT), compact ? 5 : 0);
         int width = dp(wide ? 480 : 285);
         frame.addView(words, new FrameLayout.LayoutParams(width, -1, Gravity.START | Gravity.CENTER_VERTICAL));
         return frame;
@@ -529,6 +561,72 @@ public final class MainActivity extends Activity implements ModifierSection.Host
             weighted(row, button("导入 Steam 迁移包", false, () -> pickFile(MIGRATION_ZIP)), false);
         }
         return row;
+    }
+
+    private View modNavigation() {
+        LinearLayout row = horizontal();
+        TextView local = button("本地模组", !workshopOpen, () -> switchWorkshop(false, false));
+        local.setSelected(!workshopOpen);
+        weighted(row, local, true);
+        boolean steam = workshopOpen && !workshop.isDirectMode();
+        TextView online = button("在线工坊", steam, () -> switchWorkshop(true, false));
+        online.setSelected(steam);
+        weighted(row, online, true);
+        boolean zip = workshopOpen && workshop.isDirectMode();
+        TextView direct = button("公开 ZIP", zip, () -> switchWorkshop(true, true));
+        direct.setSelected(zip);
+        weighted(row, direct, false);
+        return row;
+    }
+
+    private void switchWorkshop(boolean online, boolean direct) {
+        if (workshopOpen == online && (!online || workshop.isDirectMode() == direct)) return;
+        workshop.selectMode(direct);
+        workshopOpen = online;
+        scrollY = 0;
+        draw();
+    }
+
+    int workshopScroll() {
+        return scroll == null ? 0 : scroll.getScrollY();
+    }
+
+    void showWorkshopPage(int offset) {
+        if (tab != 3 || !workshopOpen) return;
+        scrollY = offset;
+        draw();
+    }
+
+    void scrollToWorkshop(View view) {
+        ScrollView current = scroll;
+        if (current == null) return;
+        current.post(() -> {
+            if (current != scroll || !view.isAttachedToWindow()) return;
+            int[] viewLocation = new int[2], scrollLocation = new int[2];
+            view.getLocationInWindow(viewLocation);
+            current.getLocationInWindow(scrollLocation);
+            current.scrollTo(0, current.getScrollY() + viewLocation[1] - scrollLocation[1] - dp(10));
+        });
+    }
+
+    ArchiveStore.Entry workshopArchive(String source) {
+        for (ArchiveStore.Entry entry : mods) {
+            if (entry.source().equals(source) || entry.source().equals(source + " · 含旧版目录")) return entry;
+        }
+        return null;
+    }
+
+    void refreshWorkshopLibrary() {
+        updateLists();
+        if (tab == 3 && !workshopOpen) redraw();
+    }
+
+    void openWorkshopPage(String url) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (ActivityNotFoundException ex) {
+            error("找不到可以打开来源页面的浏览器。");
+        }
     }
 
     private void promptBackupSlot() {
@@ -1262,7 +1360,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         });
     }
 
-    private void modDetails(ArchiveStore.Entry entry) {
+    void modDetails(ArchiveStore.Entry entry) {
         new AlertDialog.Builder(this).setTitle(entry.title())
                 .setMessage(entry.source() + "\n" + size(entry.bytes()) + "  ·  " + entry.count() + " 个模组\n\n可直接安装到游戏 mods 目录，启动游戏自动转换生效。")
                 .setPositiveButton("直接安装到游戏", (d, b) -> perform("正在解压并安装模组…", () -> {
@@ -1275,7 +1373,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
                     int count = (Integer) res[0];
                     applyLiveSnapshot((LiveSnapshot) res[1]);
                     noteRestore = true;
-                    message("已直接安装 " + count + " 个模组！请在上方「档位模组配置」中勾选启用。");
+                    message("已安装 " + count + " 个模组。请在「本地模组 → 档位模组配置」中勾选启用。");
                 }))
                 .setNeutralButton("更多操作", (d, b) -> entryActions(entry))
                 .setNegativeButton("关闭", null)
@@ -1287,12 +1385,36 @@ public final class MainActivity extends Activity implements ModifierSection.Host
             chooseZipOut(entry);
             return;
         }
-        String[] items = {ArchiveStore.SAVE.equals(entry.kind()) ? "导出版本 ZIP" : "导出模组 ZIP", "重命名", "删除本地副本"};
+        boolean mod = ArchiveStore.MOD.equals(entry.kind());
+        String[] items = mod ? new String[]{"导出模组 ZIP", "重命名", "删除本地副本", "查看包内文件"}
+                : new String[]{"导出版本 ZIP", "重命名", "删除本地副本"};
         new AlertDialog.Builder(this).setTitle(entry.title()).setItems(items, (dialog, choice) -> {
             if (choice == 0) chooseZipOut(entry);
             if (choice == 1) rename(entry);
             if (choice == 2) remove(entry);
+            if (choice == 3) showModFiles(entry);
         }).setNegativeButton("取消", null).show();
+    }
+
+    private void showModFiles(ArchiveStore.Entry entry) {
+        perform("正在读取压缩包目录…", () -> store.modFiles(entry), files -> {
+            android.widget.ListView list = new android.widget.ListView(this);
+            list.setDivider(new android.graphics.drawable.ColorDrawable(LINE));
+            list.setDividerHeight(dp(1));
+            list.setAdapter(new android.widget.ArrayAdapter<ArchiveStore.ModFile>(
+                    this, android.R.layout.simple_list_item_1, files) {
+                @Override public View getView(int position, View recycled, android.view.ViewGroup parent) {
+                    TextView line = recycled instanceof TextView ? (TextView) recycled
+                            : type("", 14, INK, Typeface.DEFAULT);
+                    ArchiveStore.ModFile file = getItem(position);
+                    line.setText(file.path() + "  ·  " + (file.bytes() < 1024 ? file.bytes() + " B" : size(file.bytes())));
+                    line.setPadding(dp(20), dp(11), dp(20), dp(11));
+                    return line;
+                }
+            });
+            new AlertDialog.Builder(this).setTitle("包内文件 · " + files.size() + " 个").setView(list)
+                    .setNegativeButton("关闭", null).show();
+        });
     }
 
     private void rename(ArchiveStore.Entry entry) {
@@ -1542,7 +1664,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         return detail == null || detail.isEmpty() ? "操作失败，请检查文件是否完整或存储空间是否充足。" : detail;
     }
 
-    private TextView button(String value, boolean primary, Runnable click) {
+    TextView button(String value, boolean primary, Runnable click) {
         Button button = new Button(this);
         button.setText(value);
         button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
@@ -1560,7 +1682,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         return button;
     }
 
-    private TextView type(String value, float size, int color, Typeface face) {
+    TextView type(String value, float size, int color, Typeface face) {
         TextView text = new TextView(this);
         text.setText(value);
         text.setTextSize(TypedValue.COMPLEX_UNIT_SP, size);
@@ -1570,25 +1692,25 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         return text;
     }
 
-    private void weighted(LinearLayout row, View view, boolean first) {
+    void weighted(LinearLayout row, View view, boolean first) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
         if (first) lp.setMarginEnd(dp(9));
         row.addView(view, lp);
     }
 
-    private void add(LinearLayout parent, View child, int gap) {
+    void add(LinearLayout parent, View child, int gap) {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.topMargin = dp(gap);
         parent.addView(child, lp);
     }
 
-    private LinearLayout vertical() {
+    LinearLayout vertical() {
         LinearLayout line = new LinearLayout(this);
         line.setOrientation(LinearLayout.VERTICAL);
         return line;
     }
 
-    private LinearLayout horizontal() { return new LinearLayout(this); }
+    LinearLayout horizontal() { return new LinearLayout(this); }
 
     private View rule() {
         View rule = new View(this);
@@ -1597,7 +1719,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         return rule;
     }
 
-    private GradientDrawable surface(int fill, int border, int radius) {
+    GradientDrawable surface(int fill, int border, int radius) {
         GradientDrawable shape = new GradientDrawable();
         shape.setColor(fill);
         shape.setCornerRadius(dp(radius));
@@ -1605,18 +1727,18 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         return shape;
     }
 
-    private RippleDrawable pressable(int fill, int border, int radius) {
+    RippleDrawable pressable(int fill, int border, int radius) {
         return new RippleDrawable(ColorStateList.valueOf(0x45f6b778), surface(fill, border, radius),
                 surface(Color.WHITE, 0, radius));
     }
 
     @Override public int dp(float value) { return Math.round(value * getResources().getDisplayMetrics().density); }
 
-    private static String time(long date) {
+    static String time(long date) {
         return new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(new Date(date));
     }
 
-    private static String size(long bytes) {
+    static String size(long bytes) {
         if (bytes >= 1024L * 1024 * 1024) return String.format(Locale.ROOT, "%.2f GB", bytes / 1073741824.0);
         if (bytes >= 1024 * 1024) return String.format(Locale.ROOT, "%.1f MB", bytes / 1048576.0);
         return String.format(Locale.ROOT, "%.0f KB", Math.ceil(bytes / 1024.0));
