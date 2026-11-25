@@ -8,8 +8,11 @@ __pycache__/
 /NEXT-CHAT-AUTO-SAVES.md
 /TABLET-RESOLUTION-AND-MOD-MANAGER.md
 /PHASE-SUMMARY-*.md
+/STEAM-TO-ANDROID-LAUNCHER-PLAN.md
 *.apk
 *.aab
+*.pak
+*.pak.tmp
 *.idsig
 *.dex
 *.so
@@ -18,5 +21,10 @@ __pycache__/
 *.keystore
 *.p12
 *.pfx
+*.spec
+*.bak
+.torch-backups/
+dd-steam-converter/dist/
+dd-steam-converter/build/
 .env
 .env.*

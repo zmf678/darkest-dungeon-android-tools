@@ -1,37 +1,104 @@
-# 余烬档案馆
+# 《暗黑地牢》余烬一体化启动器 & Steam 转安卓工具链 (v2.0)
 
-适配 Wicked《暗黑地牢》Android 移植版 v2.2.2（`com.darkestdungeon`）及配套自动存档实验版（`dev.torcharchive.ddgame`），支持 Android 11 及以上。应用完全在本地运行，不申请联网权限。
+> **开源与版权合规声明（BYO 模式）**：本仓库**不包含任何第三方或受版权保护的游戏二进制文件、APK、`.so` 原生库、`exefs/main` 或游戏资源**。所有工具均需在本地指向您个人合法购买的正版 Steam《暗黑地牢》目录及本机自备的基础运行壳 APK。
 
-这是独立的社区工具。本仓库提供档案馆源码和游戏侧补丁（自动存档、平板分辨率适配与本地 Mod 管理接口），构建游戏实验版需要在本机提供兼容的 APK。
+---
 
-## 存档版本与回档
+## 核心特性
 
-自动留档、直连 Mod 管理与平板分辨率适配的完整搭配方式见 [游戏补丁与实验版](game-patch/README.md)。下面的手动流程适用于原版及已有导出：
+1. **一体化薄壳启动器 APK（`app/` + `launcher-build.py`，约 15 MB）**
+   - 将「余烬档案馆」与游戏运行时合并为桌面唯一入口 **「暗黑地牢 · 余烬启动器」**（`dev.torcharchive.ddgame`）。
+   - 游戏进程（`:nx`）与启动器主进程共享同一 Linux UID，彻底消除跨应用 `ContentProvider` 通信与 HyperOS `WakePathChecker` 拦截。
+   - **A2-2 外置单包直读（默认）**：`PakMount.resolvePakPath()` 接管 `NxActivity.nxApk()`，直接从 `Android/media/dev.torcharchive.ddgame/dd_assets.pak`（`ZIP_STORED`）零解压偏移读取全部游戏资源；同时兼容 A1 单包内置模式。
+   - **全机型通用画面适配（`DisplayConfig`）**：运行时自动探测任意手机、平板、折叠屏物理分辨率，生成 4–6 组等比/高分/省电档位，支持「等比清晰 / 全屏铺满」与挖孔安全区避让。
+   - **自动留档与直连原子回档（`GameArchive` / `SnapshotStore`）**：每次游戏保存自动生成快照，改档/回档前自动停止 `:nx` 进程并强制先行备份。
 
-1. 在游戏中选择 **存档与模组 → 存档 → 导出**，把存档导出到一个普通文件夹。
-2. 在档案馆选择 **建立存档版本**，导入游戏生成的文件夹，或导入包含 `profile_0` 至 `profile_8` 的 ZIP。单独的档位文件夹也可导入。
-3. 可给版本重命名，并查看每个档位和上一份备份相比是否变化。存档版本保留原始档位文件字节，ZIP 可另存到设备上。
-4. 点开历史版本并选择 **回档到此版本**，选一个或全部档位。首次选择回档文件夹，之后会复用该目录。在游戏中用 **存档 → 导入** 选择档案馆生成的文件夹及目标档位。回档前可再建立一个版本保留目前进度。
+2. **PC 端 Steam 资源转换与一键迁移（`dd-steam-converter/`）**
+   - 自动扫描 Windows 注册表与 Steam `libraryfolders.vdf`，识别本体、已购 DLC、创意工坊 Mod（`262060`）和 `userdata` 存档。
+   - 内置多线程 `Pillow + NumPy` 向量化 DXT3/BC2 编码器（支持调用本机 `texconv`/`ffmpeg`），自动处理 `.png → .dds`、剔除 308 MB 俄语包 `overlay_ru`、处理音频兼容策略，并**100% 精确重建所有 `filelist.csv`**。
+   - 输出 `dd_assets.pak`（`ZIP_STORED` + `pak-manifest.json`）与 `steam-migration.zip`（自动将存档内 `source: Steam` 转为 `source: mod`），支持 ADB 一键推送与 `--build-apk`（A1 单包导出）。
 
-## 模组管理
+3. **游戏内容完整修改器（手机端内置 + PC 端配套）**
+   - **全维度二进制存档修改器（`SaveEditor` / `save_editor.py`）**：
+     - 庄园名称、游戏模式（`radiant` / `darkest` / `new_game_plus`）、金币/传家宝/彗星碎片/建筑蓝图编辑与一键拉满；
+     - **全英雄嵌套 DSON 编辑**：读取与修改 `persist.roster.json` 内每个英雄的嵌入式二进制 DSON（名称、当前生命、压力值、决心等级 XP、武器/护甲等级、美德/折磨、复活阵亡英雄、怪癖锁定/添加与疾病清除）；
+     - 饰品仓库自由增删（内置全流派先祖/极稀有/星晶/boss 奖杯图鉴或自定义 ID）；
+     - 城镇全部 8 座建筑升级一键全解锁（`persist.upgrades.json`）与各地牢区域 XP 修改；
+     - **全字段原始 DSON 树状编辑器**：可浏览并修改任意 `persist.*.json` 任意标量字段，所有写档均强制先拍快照并通过往返结构自检。
+   - **非破坏性游戏规则修改器（`ContentModGenerator` / `content_modifier.py`）**：
+     - 生成独立标准覆盖 Mod `torch_content_modifier`（PC Steam 与安卓通用，随时一键卸载还原）：
+       - 金币/传家宝/宝石/补给叠加上限倍率（1x–99x）与补给品免费；
+       - 英雄饰品装备槽位扩展（2–4 格）与远征背包格扩展（16–24 格）；
+       - 战斗动画倍速（1.0x–3.0x）、暴击倍率、解除 95% 命中上限、100% 无损撤退、美德触发概率、受压倍率、每周回压与极速升级；
+       - 马车招募数与花名册上限扩容；PC 端还支持全英雄基础 HP/伤害/速度/闪避倍率与建筑升级折扣。
 
-- **搭配实验版直连模式（v1.2.0+）**：
-  - 无需手动通过系统文件选择器反复授权，即可直接查看游戏目录中已安装的 Mod（版本、体积与 `.port-switch` 转换状态）。
-  - 在档案馆收录带 `project.xml` 或旧版目录结构的 Mod ZIP 后，支持**一键直接安装到实验版游戏目录**，也支持直接从游戏卸载。
-  - **档位模组配置**：直接读写各存档槽位（`profile_0`~`profile_8`）的 `persist.game.json`（无损二进制 DSON 编解码），支持勾选启用/停用、上移/下移调整加载优先级，并自动把 PC Steam 存档中的 `source: Steam` 项转为安卓本地 `mod` 映射。每次写入前都会先自动留一份档位快照。
-  - **模组预设方案**：可将当前勾选列表与优先级顺序存为命名预设，随时一键套用到任意档位。
-- **搭配原版兼容模式**：保留手动连接 `Android/media/com.darkestdungeon/mods` 查看、备份及导出 ZIP 的流程。
+---
 
-## 画面与平板分辨率适配
+## 目录结构
 
-- 搭配实验版（`2.2.2-archive.2+`）可在档案馆的 **画面** 页查看设备物理分辨率，一键切换至设备原生分辨率（如 `3008×1880`、`2560×1600`）、平板点对点 16:9（如 `3008×1692`）、`2560×1440`、`1920×1080` 或 `1280×720`。
-- 支持在 **等比清晰（原比例）** 与 **全屏铺满（去黑边）** 两种显示模式间切换；触控坐标随视图与渲染层尺寸自动线性映射，修改后完全退出游戏重启生效。
+```text
+├── app/                     # 余烬一体化启动器 Android 原创源码（含修改器 UI 与引擎层）
+├── game-patch/              # libtorcharchive.so (native/commit.c) 与主机端自动化单元测试
+├── launcher-build.py        # 薄壳 APK 组装脚本（提取壳 + 4 处最小 Smali Hook + 16KB 对齐签名）
+├── dd-steam-converter/      # PC 端 Steam 资源转换器、DSON 迁移、ADB 推送与完整桌面修改器
+├── DESIGN.md                # 视觉与交互设计规范
+└── README.md
+```
 
-## 构建
+---
 
-使用 JDK 17 或以上、Android SDK 36 和兼容 AGP 9.3.1 的 Gradle 9.5：
+## 快速构建与使用
 
-- 常规包：`gradle :app:assembleDebug :app:lintDebug`
-- 实验版并行安装包：`gradle -ParchiveLab=true :app:assembleDebug :app:lintDebug`
+### 1. 构建一体化薄壳启动器 APK（约 15 MB）
 
-原创插画及字体来源见 [DESIGN.md](DESIGN.md)，字体许可证随 APK 提供。
+```powershell
+# 1) 编译启动器外壳（需要 Android SDK 36 + JDK 21）
+gradle --offline :app:assembleDebug :app:lintDebug
+
+# 2) 组装薄壳 APK（指向您本机自备的基础运行壳 APK）
+python launcher-build.py `
+  "C:\path\to\base-dd.apk" `
+  "dist\TorchLauncher-v2.0.apk" `
+  --shell-apk "app\build\outputs\apk\debug\app-debug.apk" `
+  --jdk "D:\DevTools\Java\jdk-21" `
+  --build-tools "D:\Android\build-tools\36.0.0" `
+  --ndk "D:\Android\ndk\28.2.13676358" `
+  --apktool "D:\DevTools\apktool\apktool.jar" `
+  --keystore "C:\Users\36134\.android\debug.keystore" `
+  --key-alias androiddebugkey `
+  --key-password pass:android
+```
+
+### 2. 转换 Steam 资源、打包存档/Mod 并推送到安卓
+
+```powershell
+# 安装 Python 依赖
+pip install -r dd-steam-converter\requirements.txt
+
+# 探测本机 Steam 目录、DLC、创意工坊与存档
+python dd-steam-converter\run.py detect
+
+# 从 Steam 生成单文件数据包 dd_assets.pak（ZIP_STORED + 自动重建 filelist.csv）
+python dd-steam-converter\run.py convert `
+  --base-apk "C:\path\to\base-dd.apk" `
+  --output "dist\dd_assets.pak"
+
+# 校验 dd_assets.pak 完整性
+python dd-steam-converter\run.py verify "dist\dd_assets.pak"
+
+# 打包 Steam 存档（自动 Steam->mod）与对应创意工坊 Mod
+python dd-steam-converter\run.py migrate --output "dist\steam-migration.zip"
+
+# ADB 一键安装启动器并推送数据包（也可把 dd_assets.pak 放手机 Android/media/dev.torcharchive.ddgame/ 后在启动器内导入）
+python dd-steam-converter\run.py push --apk "dist\TorchLauncher-v2.0.apk" --pak "dist\dd_assets.pak"
+
+# 或启动 PC 桌面图形界面（含转换、迁移、完整存档修改器、游戏内容修改器）
+python dd-steam-converter\run.py gui
+```
+
+### 3. 自动化测试
+
+```powershell
+# Python 单元测试（DSON 往返、DXT3 编码、迁移、存档修改器、内容修改器）
+python -m unittest discover -s dd-steam-converter\tests -v
+```

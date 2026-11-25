@@ -8,16 +8,20 @@ android {
 
     defaultConfig {
         def lab = providers.gradleProperty('archiveLab').map { it.toBoolean() }.getOrElse(false)
-        applicationId lab ? 'dev.torcharchive.dd.lab' : 'dev.torcharchive.dd'
-        minSdk 30
+        applicationId lab ? 'dev.torcharchive.ddgame.lab' : 'dev.torcharchive.ddgame'
+        minSdk 26
         targetSdk 36
-        versionCode 3
-        versionName '1.2.0'
-        manifestPlaceholders = [archiveLabel: lab ? '余烬档案馆 · 实验版' : '余烬档案馆']
+        versionCode 4
+        versionName '2.0.0'
+        manifestPlaceholders = [archiveLabel: lab ? '暗黑地牢 · 余烬启动器(测试)' : '暗黑地牢 · 余烬启动器']
     }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        disable 'MissingClass'
     }
 }
