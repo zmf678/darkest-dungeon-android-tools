@@ -1,4 +1,4 @@
-"""Build and verify dd_assets.pak (ZIP_STORED) from a genuine Steam Darkest Dungeon install + BYO base APK."""
+"""Build and verify dd_assets.pak (ZIP_STORED) from a genuine Steam Darkest Dungeon install + Switch diff layer / base APK."""
 
 from __future__ import annotations
 
@@ -55,6 +55,18 @@ ROMFS_ROOT_DIRS = (
 )
 
 EXTRA_SKIP_NAMES = {".DS_Store", "Thumbs.db", "desktop.ini"}
+
+
+def default_switch_diff_path() -> Optional[Path]:
+    """Locate bundled switch-runtime/switch-diff-layer.zip relative to repo root or CWD."""
+    candidates = (
+        Path(__file__).resolve().parents[2] / "switch-runtime" / "switch-diff-layer.zip",
+        Path.cwd() / "switch-runtime" / "switch-diff-layer.zip",
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 @dataclass
@@ -396,6 +408,17 @@ def build_pak(opts: BuildOptions) -> VerifyResult:
 
             # 5. Copy Switch-only diff entries & base APK audio/DLC fallback
             report("Merging Switch diff layer & DLCs", 0, 1)
+            # Only treat a base-archive DLC as standalone-includable when it contains
+            # actual game assets beyond lightweight metadata (dlc_info.csv / filelist.csv / *.loc).
+            base_full_dlcs: Set[str] = set()
+            for name in base_infos:
+                if name.startswith("assets/nx/aoc/"):
+                    parts = name.split("/")
+                    if len(parts) >= 5:
+                        fname = parts[-1].lower()
+                        if fname not in ("filelist.csv", "dlc_info.csv") and not fname.endswith(".loc"):
+                            base_full_dlcs.add(parts[3])
+
             for name in sorted(base_infos):
                 if name.endswith("/filelist.csv"):
                     continue
@@ -414,7 +437,7 @@ def build_pak(opts: BuildOptions) -> VerifyResult:
                             data = base_zf.read(name)
                             _write_stored_bytes(out_zf, name, data)
                             actual_sizes[name] = len(data)
-                    elif opts.include_base_dlcs:
+                    elif opts.include_base_dlcs and dlc_nx_name in base_full_dlcs:
                         if dlc_nx_name not in dlcs_included:
                             dlcs_included.append(dlc_nx_name)
                         data = base_zf.read(name)

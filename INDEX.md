@@ -1,6 +1,6 @@
 # 《暗黑地牢》余烬项目工作区总索引（Torch Archive v2.0）
 
-> **开源与版权合规声明（BYO 模式）**：本仓库**不包含任何第三方或受版权保护的游戏二进制文件、APK、`.so` 原生库、`exefs/main` 或商业游戏资源**。所有工具均由用户在本地指向合法购买的正版 Steam《暗黑地牢》目录与自备的匹配 Wicked 2.2.2 基础 APK 运行。
+> **私有仓库内置运行层说明**：本仓库为**私有仓库**，已在 [switch-runtime/](switch-runtime/) 目录内置精简版 **Switch 运行时壳**（`TorchLauncher-v2.0.apk`、`wicked-runtime-shell.apk`）与 **Switch 游戏主程序与触屏差异层**（`switch-diff-layer.zip`），工具链开箱即可搭配本机正版 Steam《暗黑地牢》目录运行，不再依赖 3.8 GB 完整基础 APK（`dist/` 与本地生成的 `.pak`/`.apk` 仍受 `.gitignore` 忽略）。请勿将本仓库设为公开。
 
 本索引汇总 `d:\暗黑地牢apk` 工作区内的全部技术文档、模块说明、源码文件、构建与测试脚本，以及日常开发与排查的任务速查入口。
 
@@ -15,6 +15,9 @@
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | v2.0 一体化薄壳架构、4 处 Smali Hook、A2-2/A1 模式、ASTC 4×4 DDS 纹理与 `filelist.csv` 规范 | 架构师、逆向/移植开发者 |
 | [docs/MODIFIER-GUIDE.md](docs/MODIFIER-GUIDE.md) | 手机内置与 PC 端双端修改器使用指南、二进制 DSON 规范与规则覆写参数表 | 修改器使用者、DSON 开发者 |
 | [docs/BUILD-AND-TEST.md](docs/BUILD-AND-TEST.md) | 工具链环境、Gradle/薄壳 APK 构建、Steam 转换核验、单测与真机排障 | 构建发布、测试与排障人员 |
+| [docs/ROUTE-C-PURE-STEAM-PLAN.md](docs/ROUTE-C-PURE-STEAM-PLAN.md) | 路线 C（v3.0）纯正版 Steam 安卓开源运行方案总体架构、M0–M4 路线图与 15 项可执行任务清单 | 路线 C 开发者、架构师 |
+| [docs/M0-BENCHMARK.md](docs/M0-BENCHMARK.md) | 路线 C 阶段 M0 实测基准报告（环境、64 位裁剪同步、多运行时/图形后端 FPS 与内存对比、主引擎锁定） | 开发者、性能验收人员 |
+| [docs/M0-MUMU-POC-GUIDE.md](docs/M0-MUMU-POC-GUIDE.md) | 路线 C 阶段 M0 MuMu Android 15 模拟器复现手册、避坑实录与 M1 架构交接清单 | 测试与 M1 开发者 |
 | [app/README.md](app/README.md) | Android 一体化启动器 `dev.torcharchive.ddgame` 包结构、UI 页签与引擎类说明 | Android 客户端开发者 |
 | [dd-steam-converter/README.md](dd-steam-converter/README.md) | PC 端 Steam 资源转换、存档迁移、ADB 推送、CLI/GUI 修改器说明 | PC 工具链开发者与桌面用户 |
 | [game-patch/README.md](game-patch/README.md) | 原生 Hook（`commit.c`）、Java 主机测试集与 v1 双包方案历史参考 | 原生 Hook / 单测维护者 |
@@ -31,11 +34,20 @@
 
 | 文件 | 用途说明 |
 | :--- | :--- |
-| [launcher-build.py](launcher-build.py) | 一体化薄壳启动器 APK 组装脚本：校验基础 APK SHA-256、对 `NxActivity` 与 `LayerView` 注入 4 处最小 Smali Hook、编译 `libtorcharchive.so`、合并壳与游戏 MultiDex（`classes<N+1>.dex`）、支持可选 `--bundle-pak` A1 整包、16 KB 对齐与签名 |
+| [launcher-build.py](launcher-build.py) | 一体化薄壳启动器 APK 组装脚本：校验 `switch-runtime/wicked-runtime-shell.apk` 或完整基础 APK SHA-256、对 `NxActivity` 与 `LayerView` 注入 4 处最小 Smali Hook、编译/复用 `libtorcharchive.so`、合并壳与游戏 MultiDex（`classes<N+1>.dex`）、支持可选 `--bundle-pak` A1 整包、16 KB 对齐与签名 |
 | [build.gradle](build.gradle) | 顶层 Gradle 构建脚本（声明 AGP 插件版本与仓库配置） |
 | [settings.gradle](settings.gradle) | Gradle 多模块设置文件（引入 `:app` 模块） |
 | [gradle.properties](gradle.properties) | Gradle JVM 与 AndroidX/构建属性配置 |
-| [.gitignore](.gitignore) | Git 忽略规则（严格排除 `dist/`、`.apk`、`.pak`、`.so`、`.dex`、`.zip`、`.keystore`、`.torch-backups/` 与本地会话规划文档） |
+| [.gitignore](.gitignore) | Git 忽略规则（排除 `dist/` 及本地临时 `.apk`/`.pak`/`.so`/`.dex`/`.zip`/`.keystore`/`.torch-backups/`，仅显式放行私有仓库受控目录 `switch-runtime/`） |
+
+### 1.5 私有仓库内置 Switch 运行时壳与触屏差异层（`switch-runtime/`）
+
+| 文件 | 体积 | 用途说明 |
+| :--- | :---: | :--- |
+| [TorchLauncher-v2.0.apk](switch-runtime/TorchLauncher-v2.0.apk) | 14.87 MB | 预组装、16 KB 对齐且已签名的余烬一体化薄壳启动器（含启动器 UI、4 处 Smali Hook、`libtorcharchive.so` 与 Wicked Switch 运行时壳），可直接 `adb install` 或 `run.py push` 安装 |
+| [wicked-runtime-shell.apk](switch-runtime/wicked-runtime-shell.apk) | 9.01 MB | 从 Wicked 2.2.2 基础 APK 抽取的精简 Switch 运行时壳（`AndroidManifest.xml`、`resources.arsc`、`res/`、`classes.dex`、4 个 `arm64-v8a/*.so` 与 5 个辅助小资产），供 `launcher-build.py` 源码重编使用 |
+| [switch-diff-layer.zip](switch-runtime/switch-diff-layer.zip) | 38.01 MB | Switch 游戏主程序（`assets/nx/exefs/main`）+ Switch 触屏/UI 覆写差异层（`assets/nx/overlay/`，已剔除 `overlay_ru/`）+ 23 份 `filelist.csv` + 5 份 `dlc_info.csv` + 39 项 Switch 专属 `romfs/` 差异件与 DLC `.loc` 兼容件，由 `dd-steam-converter` 自动识别 |
+| [SHA256SUMS.txt](switch-runtime/SHA256SUMS.txt) | < 1 KB | 上述 3 个内置二进制包的精确 SHA-256 校验清单 |
 
 ### 2. Android 一体化启动器 UI 与工程配置（`app/`）
 
@@ -129,8 +141,8 @@
 
 ## 本地忽略目录与文件说明
 
-为确保仓库精简及严格遵守 BYO 版权规范，以下目录和文件已写入 [.gitignore](.gitignore)，仅存在于本地工作区中、不会提交到远端仓库：
+为保持仓库精简（仅保留 `switch-runtime/` 下的 61.9 MB 精简运行时壳与触屏差异层，不提交 3.8 GB+ 整包与构建产物），以下目录和文件已写入 [.gitignore](.gitignore)，仅存在于本地工作区中、不会提交到远端仓库：
 
-- **输出与中间产物**：`dist/`、`decoded/`、`*.apk`、`*.pak`、`*.dex`、`*.so`、`*.zip`、`*.keystore`、`.gradle/`、`**/build/`
+- **输出与中间产物**：`dist/`、`decoded/`、`*.apk`、`*.pak`、`*.dex`、`*.so`、`*.zip`、`*.keystore`、`.gradle/`、`**/build/`（`switch-runtime/` 内受控文件除外）
 - **PC 修改器自动备份**：`.torch-backups/`
 - **本地阶段性规划与总结笔记**：`STEAM-TO-ANDROID-LAUNCHER-PLAN.md`、`NEXT-CHAT-AUTO-SAVES.md`、`TABLET-RESOLUTION-AND-MOD-MANAGER.md`、`PHASE-SUMMARY-*.md`

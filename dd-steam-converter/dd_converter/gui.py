@@ -17,7 +17,7 @@ except ImportError:
 from .adb_push import push_to_device
 from .content_modifier import MOD_ID, ModifierConfig, generate_content_mod, pack_mod_zip
 from .migration import build_migration_zip
-from .pak_builder import BuildOptions, build_pak, verify_pak
+from .pak_builder import BuildOptions, build_pak, default_switch_diff_path, verify_pak
 from .save_editor import (
     add_trinket,
     batch_improve_heroes,
@@ -107,15 +107,18 @@ if ctk is not None:
 
         def _build_convert_tab(self) -> None:
             f = self.tab_convert
+            default_diff = default_switch_diff_path()
             self.steam_var = tk.StringVar(value=str(self.env.game_dir or ""))
-            self.base_apk_var = tk.StringVar(value=r"C:\Users\36134\Downloads\Darkest-Dungeon-v2.2.2-APKVISION.apk")
+            self.base_apk_var = tk.StringVar(
+                value=str(default_diff) if default_diff else str(Path.cwd() / "switch-runtime/switch-diff-layer.zip")
+            )
             self.out_pak_var = tk.StringVar(value=str(Path.cwd() / "dist/dd_assets.pak"))
             self.tex_var = tk.StringVar(value="dds")
             self.aud_var = tk.StringVar(value="auto")
 
             for lbl, var, pick_dir in (
                 ("Steam 游戏目录", self.steam_var, True),
-                ("本机基础运行壳 APK (BYO)", self.base_apk_var, False),
+                ("Switch 差异层 / 基础 APK", self.base_apk_var, False),
                 ("输出 dd_assets.pak", self.out_pak_var, False),
             ):
                 row = ctk.CTkFrame(f, fg_color="transparent")

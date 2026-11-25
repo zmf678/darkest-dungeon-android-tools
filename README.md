@@ -1,25 +1,25 @@
 # Darkest Dungeon Android Tools — 《暗黑地牢》余烬一体化启动器 & Steam 转安卓工具链 (v2.0)
 
-> **开源与版权合规声明（BYO 模式）**：本仓库（`darkest-dungeon-android-tools`）**不包含任何第三方或受版权保护的游戏二进制文件、APK、游戏原生库、`exefs/main` 或游戏资源**。Release 中的 `TorchLauncher-Shell-*.apk` 仅包含本仓库原创开源外壳与原创 7.5 KB Hook 库 `libtorcharchive.so`，**不能单独直接安装运行游戏**，需按下方三步流程在本地结合您自备的正版 Steam 目录与匹配基础壳 APK 完成组装。
+> **私有仓库内置运行层说明**：本仓库现为**私有仓库**，已在 [switch-runtime/](switch-runtime/) 目录直接内置精简后的 **Switch 运行时壳**（预组装可直装的 `TorchLauncher-v2.0.apk` 与供源码重编译用的 `wicked-runtime-shell.apk`）及 **Switch 游戏主程序与触屏差异层**（`switch-diff-layer.zip`，含 `exefs/main`、`overlay/` 触屏界面层、23 份 `filelist.csv`、`dlc_info.csv` 与 Switch 专属兼容件）。日常使用与构建均**不再需要额外寻找 3.8 GB 原版基础 APK**，只需本机正版 Steam《暗黑地牢》目录即可完成转换与部署；请勿将本仓库重新设为公开。
 
 > **文档与索引导航**：[工作区总索引 (INDEX.md)](INDEX.md) · [系统架构与纹理规范](docs/ARCHITECTURE.md) · [完整修改器指南](docs/MODIFIER-GUIDE.md) · [构建测试与排障](docs/BUILD-AND-TEST.md) · [Android 启动器模块](app/README.md) · [PC 转换器](dd-steam-converter/README.md) · [原生 Hook 与单测](game-patch/README.md)
 
 ---
 
-## 使用前必读：前置条件与三步上手清单
+## 使用前必读：前置条件与两步上手清单
 
 ### 你需要先准备什么
-1. **本机已安装的正版 Steam《暗黑地牢》目录**（用于转换贴图/DLC 资源以及迁移存档与创意工坊 Mod）。
-2. **本机自备的匹配 Wicked 2.2.2 基础 APK**（[launcher-build.py](launcher-build.py) 会校验其 SHA-256：`0b84730f...a619410`，用于提取底层运行时核心与 Switch 界面覆写层）。
-3. **PC 端基础工具**（下载 [Release](https://github.com/zmf678/darkest-dungeon-android-tools/releases/latest) 的 `TorchLauncher-Shell-v2.0.0.apk` 后，**不需要安装 Gradle、Android SDK Platform 或 Android NDK**）：
+1. **本机已安装的正版 Steam《暗黑地牢》目录**（用于转换本体/已购 DLC 贴图、音频、配置，以及迁移存档与创意工坊 Mod）。
+2. **PC 端 Python 环境**（日常直接使用仓库内置的 [switch-runtime/TorchLauncher-v2.0.apk](switch-runtime/TorchLauncher-v2.0.apk) 与 [switch-runtime/switch-diff-layer.zip](switch-runtime/switch-diff-layer.zip)，**无需安装 Gradle、JDK、Android SDK、Android NDK 或 apktool**）：
    - Python 3.10+（执行 `pip install -r dd-steam-converter\requirements.txt`）；
-   - JDK 21、`apktool.jar`、Android Build Tools（仅需 `zipalign` 与 `apksigner.jar`）及任意签名密钥（如 `debug.keystore`）；
-   - （强烈推荐）从 [ARM astc-encoder Releases](https://github.com/ARM-software/astc-encoder/releases) 下载 `astcenc-avx2.exe`（或 `astcenc`）放入 `dd-steam-converter\bin\`，可将贴图画质拉满至原版 51–55 dB PSNR。
+   - （强烈推荐）从 [ARM astc-encoder Releases](https://github.com/ARM-software/astc-encoder/releases) 下载 `astcenc-avx2.exe`（或 `astcenc`）放入 `dd-steam-converter\bin\`，可将贴图画质拉满至原版 51–55 dB PSNR；
+   - （可选）若需把 Steam 过场 `.ogv` 转码为 `.mp4`，在系统 `PATH` 中安装 `ffmpeg`。
+3. **仅当需要修改并重编启动器 APK 源码时**，才需要 JDK 21、Android Build Tools（`zipalign` / `apksigner.jar`）、`apktool.jar` 及签名密钥，且可直接以仓库内 9 MB 的 [switch-runtime/wicked-runtime-shell.apk](switch-runtime/wicked-runtime-shell.apk) 作为 `launcher-build.py` 输入。
 
-### 三步跑通安卓真机
-1. **组装约 15 MB 的薄壳启动器 APK（免 Gradle / 免 NDK）**：下载 Release 的 `TorchLauncher-Shell-v2.0.0.apk`，运行 `launcher-build.py` 注入本地基础壳生成 `dist\TorchLauncher-v2.0.apk`。
-2. **转换正版 Steam 资源为单文件包**：运行 `python dd-steam-converter\run.py convert --base-apk <基础APK> --output dist\dd_assets.pak`（可选同时运行 `migrate` 打包 Steam 存档与创意工坊 Mod）。
-3. **安装并推送到手机/平板**：手机开启 USB 调试后运行 `python dd-steam-converter\run.py push --apk dist\TorchLauncher-v2.0.apk --pak dist\dd_assets.pak`，打开桌面「暗黑地牢 · 余烬启动器」点「开始游戏」即可。
+### 两步跑通安卓真机
+1. **转换正版 Steam 资源为单文件包**（自动读取仓库内 `switch-runtime\switch-diff-layer.zip`）：
+   运行 `python dd-steam-converter\run.py convert --output dist\dd_assets.pak`（可选同时运行 `migrate` 打包 Steam 存档与创意工坊 Mod）。
+2. **安装并推送到手机/平板**：手机开启 USB 调试后运行 `python dd-steam-converter\run.py push --apk switch-runtime\TorchLauncher-v2.0.apk --pak dist\dd_assets.pak`，打开桌面「暗黑地牢 · 余烬启动器」点「开始游戏」即可。
 
 ---
 
@@ -59,9 +59,10 @@
 ```text
 ├── INDEX.md                 # 工作区总索引与全量源码文件清单
 ├── docs/                    # 系统架构（ARCHITECTURE）、修改器指南（MODIFIER-GUIDE）、构建测试（BUILD-AND-TEST）
+├── switch-runtime/          # 私有仓库内置 Switch 运行时壳（TorchLauncher-v2.0.apk / wicked-runtime-shell.apk）与 Switch 主程序+触屏差异层（switch-diff-layer.zip）
 ├── app/                     # 余烬一体化启动器 Android 原创源码（含修改器 UI 与引擎层，见 app/README.md）
 ├── game-patch/              # libtorcharchive.so (native/commit.c)、主机端自动化单测与 v1 历史参考
-├── launcher-build.py        # 薄壳 APK 组装脚本（提取壳 + 4 处最小 Smali Hook + 16KB 对齐签名）
+├── launcher-build.py        # 薄壳 APK 组装脚本（支持 switch-runtime/wicked-runtime-shell.apk 与完整基础 APK，注入 4 处 Smali Hook 并 16KB 对齐签名）
 ├── dd-steam-converter/      # PC 端 Steam 资源转换器、DSON 迁移、ADB 推送与完整桌面修改器
 ├── DESIGN.md                # 视觉与交互设计规范
 ├── PRODUCT.md               # 初始产品定位简述
@@ -72,13 +73,40 @@
 
 ## 快速构建与使用
 
-### 1. 构建一体化薄壳启动器 APK（约 15 MB）
+### 1. 直接转换 Steam 资源、打包存档/Mod 并推送到安卓（推荐，免构建 APK）
 
 ```powershell
-# 方式 A（推荐，免 Gradle / 免 Android SDK / 免 NDK）：
-# 直接下载 GitHub Release 的 TorchLauncher-Shell-v2.0.0.apk（已内置原创 libtorcharchive.so）
+# 安装 Python 依赖
+pip install -r dd-steam-converter\requirements.txt
+
+# 探测本机 Steam 目录、DLC、创意工坊与存档
+python dd-steam-converter\run.py detect
+
+# 从 Steam + 仓库内置 switch-runtime\switch-diff-layer.zip 生成单文件数据包 dd_assets.pak
+# （无需手动指定 --base-apk，也可用 --switch-diff / --base-apk 显式覆盖）
+python dd-steam-converter\run.py convert --output "dist\dd_assets.pak"
+
+# 校验 dd_assets.pak 完整性
+python dd-steam-converter\run.py verify "dist\dd_assets.pak"
+
+# 打包 Steam 存档（自动 Steam->mod）与对应创意工坊 Mod
+python dd-steam-converter\run.py migrate --output "dist\steam-migration.zip"
+
+# ADB 一键安装仓库预置启动器并推送数据包
+python dd-steam-converter\run.py push `
+  --apk "switch-runtime\TorchLauncher-v2.0.apk" `
+  --pak "dist\dd_assets.pak"
+
+# 或启动 PC 桌面图形界面（默认自动填充 switch-runtime\switch-diff-layer.zip）
+python dd-steam-converter\run.py gui
+```
+
+### 2. （可选）从源码重新构建一体化薄壳启动器 APK（约 15 MB）
+
+```powershell
+# 方式 A（免 Gradle / 免 Android SDK / 免 NDK，直接复用仓库内 9 MB 运行时壳）：
 python launcher-build.py `
-  "C:\path\to\base-dd.apk" `
+  "switch-runtime\wicked-runtime-shell.apk" `
   "dist\TorchLauncher-v2.0.apk" `
   --shell-apk "TorchLauncher-Shell-v2.0.0.apk" `
   --jdk "D:\DevTools\Java\jdk-21" `
@@ -91,7 +119,7 @@ python launcher-build.py `
 # 方式 B（从源码全量自编，需 Android SDK 36 + JDK 21 + NDK）：
 gradle --offline :app:assembleDebug :app:lintDebug
 python launcher-build.py `
-  "C:\path\to\base-dd.apk" `
+  "switch-runtime\wicked-runtime-shell.apk" `
   "dist\TorchLauncher-v2.0.apk" `
   --shell-apk "app\build\outputs\apk\debug\app-debug.apk" `
   --jdk "D:\DevTools\Java\jdk-21" `
@@ -101,33 +129,6 @@ python launcher-build.py `
   --keystore "C:\Users\<user>\.android\debug.keystore" `
   --key-alias androiddebugkey `
   --key-password pass:android
-```
-
-### 2. 转换 Steam 资源、打包存档/Mod 并推送到安卓
-
-```powershell
-# 安装 Python 依赖
-pip install -r dd-steam-converter\requirements.txt
-
-# 探测本机 Steam 目录、DLC、创意工坊与存档
-python dd-steam-converter\run.py detect
-
-# 从 Steam 生成单文件数据包 dd_assets.pak（ZIP_STORED + 自动重建 filelist.csv）
-python dd-steam-converter\run.py convert `
-  --base-apk "C:\path\to\base-dd.apk" `
-  --output "dist\dd_assets.pak"
-
-# 校验 dd_assets.pak 完整性
-python dd-steam-converter\run.py verify "dist\dd_assets.pak"
-
-# 打包 Steam 存档（自动 Steam->mod）与对应创意工坊 Mod
-python dd-steam-converter\run.py migrate --output "dist\steam-migration.zip"
-
-# ADB 一键安装启动器并推送数据包（也可把 dd_assets.pak 放手机 Android/media/dev.torcharchive.ddgame/ 后在启动器内导入）
-python dd-steam-converter\run.py push --apk "dist\TorchLauncher-v2.0.apk" --pak "dist\dd_assets.pak"
-
-# 或启动 PC 桌面图形界面（含转换、迁移、完整存档修改器、游戏内容修改器）
-python dd-steam-converter\run.py gui
 ```
 
 ### 3. 自动化测试

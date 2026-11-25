@@ -1,5 +1,5 @@
 """Assemble the unified Torch Launcher thin-shell APK (A2-2) or full bundled APK (A1)
-against a user-supplied matching Wicked 2.2.2 APK without storing copyrighted binaries in the repo.
+against either switch-runtime/wicked-runtime-shell.apk or a matching full Wicked 2.2.2 APK.
 """
 
 import argparse
@@ -15,6 +15,8 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent
 BASE_HASH = "0b84730f228f4308fd408c880ad5fdfcb4f10fc096d97079857bbbc17a619410"
+SHELL_BASE_HASH = "130ae6b949545ce5da66e9c7d029c24d650ed6d12ec5a99ea085cd8509be86f2"
+ALLOWED_BASE_HASHES = frozenset({BASE_HASH, SHELL_BASE_HASH})
 
 WICKED_LIBS = (
     "lib/arm64-v8a/libc++_shared.so",
@@ -42,8 +44,10 @@ def run(*command, env=None):
 def exact_input(apk: Path):
     with apk.open("rb") as source:
         digest = hashlib.file_digest(source, "sha256").hexdigest()
-    if digest != BASE_HASH:
-        raise SystemExit(f"The base APK does not match the pinned Wicked 2.2.2 build: {digest}")
+    if digest not in ALLOWED_BASE_HASHES:
+        raise SystemExit(
+            f"The base APK/runtime shell does not match the pinned Wicked 2.2.2 build or extracted shell: {digest}"
+        )
 
 
 def patch_wicked_smali(project: Path):
@@ -288,7 +292,11 @@ def build(args, work: Path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("base_apk", type=Path, help="Local Wicked 2.2.2 APK (hash-verified, never committed)")
+    parser.add_argument(
+        "base_apk",
+        type=Path,
+        help="Path to switch-runtime/wicked-runtime-shell.apk or a matching full Wicked 2.2.2 APK",
+    )
     parser.add_argument("output", type=Path, help="Output TorchLauncher APK path")
     parser.add_argument("--shell-apk", type=Path, help="Prebuilt launcher-shell APK from :app:assembleDebug")
     parser.add_argument("--gradle", type=Path, help="Path to gradle.bat / gradle if --shell-apk is omitted")

@@ -29,3 +29,10 @@ dd-steam-converter/build/
 dd-steam-converter/bin/
 .env
 .env.*
+
+# Private repository bundled Switch runtime shell & diff layer
+!switch-runtime/
+!switch-runtime/TorchLauncher-v2.0.apk
+!switch-runtime/wicked-runtime-shell.apk
+!switch-runtime/switch-diff-layer.zip
+!switch-runtime/SHA256SUMS.txt

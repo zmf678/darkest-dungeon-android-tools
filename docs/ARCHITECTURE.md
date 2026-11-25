@@ -50,7 +50,11 @@ dev.torcharchive.ddgame（同一 Linux UID，共享私有目录与 Android/media
 
 ## 3. 薄壳 APK 组装与 4 处最小 Smali Hook
 
-[launcher-build.py](../launcher-build.py) 要求用户提供与固定 SHA-256 匹配的本地 Wicked 2.2.2 APK（`BASE_HASH = 0b84730f228f4308fd408c880ad5fdfcb4f10fc096d97079857bbbc17a619410`），严禁将原包提交到仓库。组装流程如下：
+私有仓库已在 `switch-runtime/` 内置两份运行时壳文件，免去每次处理 3.8 GB 完整基础 APK：
+- **[switch-runtime/TorchLauncher-v2.0.apk](../switch-runtime/TorchLauncher-v2.0.apk)**（14.87 MB）：已组装、16 KB 对齐并签名的薄壳启动器成品，可直接安装；
+- **[switch-runtime/wicked-runtime-shell.apk](../switch-runtime/wicked-runtime-shell.apk)**（9.01 MB，`SHA-256: 130ae6b9...09be86f2`）：仅包含 Wicked 2.2.2 代码与原生库的精简运行壳，供 [launcher-build.py](../launcher-build.py) 重编组装使用（脚本同时兼容原始完整 Wicked 2.2.2 APK `0b84730f...a619410`）。
+
+组装流程如下：
 
 1. **反编译与最小化 Smali 注入（`patch_wicked_smali()`）**：仅抽取并修改 Wicked 的 `NxActivity.smali` 与 `NxActivity$LayerView.smali`，共注入 4 处 Hook：
    - **Hook 1**：在 `System.loadLibrary("ddnx")` 之后调用 `GameArchive.install(Context)`；
@@ -75,7 +79,7 @@ dev.torcharchive.ddgame（同一 Linux UID，共享私有目录与 Android/media
 
 ## 5. Steam 资源转换、ASTC 4×4 DDS 与 `filelist.csv` 规范
 
-PC 端转换器 [pak_builder.py](../dd-steam-converter/dd_converter/pak_builder.py) 与 [dds_encoder.py](../dd-steam-converter/dd_converter/dds_encoder.py) 根据真机实测结果严格对齐 Wicked `libddnx.so` 的资源读取机制：
+PC 端转换器 [pak_builder.py](../dd-steam-converter/dd_converter/pak_builder.py) 与 [dds_encoder.py](../dd-steam-converter/dd_converter/dds_encoder.py) 默认自动加载私有仓库内置的 **[switch-runtime/switch-diff-layer.zip](../switch-runtime/switch-diff-layer.zip)**（38.01 MB，含 `assets/nx/exefs/main`、`assets/nx/overlay/`、23 份 `filelist.csv`、5 份 `dlc_info.csv` 与 39 项 Switch 专属 `romfs/` 差异件及 DLC `.loc` 兼容件；亦可通过 `--base-apk` 覆盖为完整基础 APK），并严格对齐 Wicked `libddnx.so` 的资源读取机制：
 
 1. **纹理封装格式（ASTC 4×4 in DXT3 DDS Header）**：
    - Wicked 引擎 `nxgl_CompressedTexImage2D` 在底层会将 `GL_COMPRESSED_RGBA_S3TC_DXT3_EXT`（`0x83f2`）直接重映射为 `GL_COMPRESSED_RGBA_ASTC_4x4_KHR`（`0x93b0`）。

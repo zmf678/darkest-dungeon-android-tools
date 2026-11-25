@@ -35,8 +35,8 @@ pip install -r requirements.txt
 # 1. 自动扫描 Steam 游戏、DLC、创意工坊与存档
 python run.py detect
 
-# 2. 转换生成外置单包 dd_assets.pak（默认 ASTC 4×4 DXT3 DDS 头封装，保留 LUT PNG，剔除俄语包，精确重建 filelist.csv）
-python run.py convert --base-apk "C:\path\to\base.apk" --output "..\dist\dd_assets.pak"
+# 2. 转换生成外置单包 dd_assets.pak（自动识别 ..\switch-runtime\switch-diff-layer.zip，亦支持 --switch-diff / --base-apk 覆盖）
+python run.py convert --output "..\dist\dd_assets.pak"
 
 # 3. 逐条核验 dd_assets.pak（ZIP_STORED + 所有 filelist.csv 字节精确匹配）
 python run.py verify "..\dist\dd_assets.pak"
@@ -44,11 +44,11 @@ python run.py verify "..\dist\dd_assets.pak"
 # 4. 一站式迁移 Steam 存档（自动 Steam -> mod）与创意工坊 Mod
 python run.py migrate --output "..\dist\steam-migration.zip"
 
-# 5. ADB 一键推送到设备
-python run.py push --apk "..\dist\TorchLauncher-v2.0.apk" --pak "..\dist\dd_assets.pak"
+# 5. ADB 一键推送到设备（直接使用私有仓库预置薄壳启动器）
+python run.py push --apk "..\switch-runtime\TorchLauncher-v2.0.apk" --pak "..\dist\dd_assets.pak"
 
 # 6. A1 兼容模式：把薄壳启动器与 dd_assets.pak 合并为单个独立完整 APK
-python run.py build-apk --shell-apk "..\dist\TorchLauncher-v2.0.apk" --pak "..\dist\dd_assets.pak" --output "..\dist\TorchLauncher-Full-A1.apk" ...
+python run.py build-apk --shell-apk "..\switch-runtime\TorchLauncher-v2.0.apk" --pak "..\dist\dd_assets.pak" --output "..\dist\TorchLauncher-Full-A1.apk" ...
 
 # 7. PC 端完整存档修改器（写前自动备份到 .torch-backups/）
 python run.py edit-save "D:\Steam\userdata\...\profile_0" info

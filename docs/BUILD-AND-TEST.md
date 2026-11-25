@@ -14,9 +14,11 @@
   pip install -r dd-steam-converter\requirements.txt
   ```
   - （强烈推荐）从 ARM 官方 `astc-encoder` Release 下载 `astcenc-avx2.exe` 放入 `dd-steam-converter\bin\`（或加入 `PATH`），可将纹理转换质量提升至 51–55 dB PSNR（与原版一致）；未安装时自动使用内置 NumPy ASTC 4×4 编码器。
-- **BYO 输入准备**：
-  - 本机正版 Steam《暗黑地牢》安装目录（支持自动探测，也可通过 `--steam-dir` 指定）；
-  - 本机自备的匹配 Wicked 2.2.2 基础 APK（[launcher-build.py](../launcher-build.py) 会校验其 SHA-256）。
+- **私有仓库内置运行层（开箱即用，位于 `switch-runtime/`）**：
+  - [switch-runtime/TorchLauncher-v2.0.apk](../switch-runtime/TorchLauncher-v2.0.apk)（14.87 MB）：已组装完成的薄壳启动器，可直接推送安装；
+  - [switch-runtime/wicked-runtime-shell.apk](../switch-runtime/wicked-runtime-shell.apk)（9.01 MB）：精简 Wicked 2.2.2 运行时壳，供 `launcher-build.py` 重编使用；
+  - [switch-runtime/switch-diff-layer.zip](../switch-runtime/switch-diff-layer.zip)（38.01 MB）：Switch 主程序（`exefs/main`）与触屏/UI 差异层，`dd-steam-converter` 默认自动识别。
+- **用户本机输入**：仅需本机正版 Steam《暗黑地牢》安装目录（支持自动探测，也可通过 `--steam-dir` 指定）。
 
 若 Android SDK 未放在默认路径，请在当前 PowerShell 会话中先显式指定环境变量：
 
@@ -40,11 +42,13 @@ gradle --offline :app:assembleDebug :app:lintDebug
 
 ### 2.2 组装薄壳启动器 APK（A2-2 模式，约 15 MB）
 
-若直接下载 GitHub Release 提供的 `TorchLauncher-Shell-v2.0.0.apk`（已内置本仓库原创 7.5 KB 的 `libtorcharchive.so`），可省略 `--ndk` 与上面的 Gradle 步骤，直接运行：
+若无需修改启动器源码，直接安装仓库内置的 [switch-runtime/TorchLauncher-v2.0.apk](../switch-runtime/TorchLauncher-v2.0.apk) 即可跳过本节。
+
+若需重编启动器，使用仓库内 9 MB 的 [switch-runtime/wicked-runtime-shell.apk](../switch-runtime/wicked-runtime-shell.apk) 搭配预编壳 `TorchLauncher-Shell-v2.0.0.apk`（已内置 7.5 KB `libtorcharchive.so`），可省略 `--ndk` 与上面的 Gradle 步骤，直接运行：
 
 ```powershell
 python launcher-build.py `
-  "C:\path\to\base-dd.apk" `
+  "switch-runtime\wicked-runtime-shell.apk" `
   "dist\TorchLauncher-v2.0.apk" `
   --shell-apk "TorchLauncher-Shell-v2.0.0.apk" `
   --jdk "D:\DevTools\Java\jdk-21" `
@@ -59,7 +63,7 @@ python launcher-build.py `
 
 ```powershell
 python launcher-build.py `
-  "C:\path\to\base-dd.apk" `
+  "switch-runtime\wicked-runtime-shell.apk" `
   "dist\TorchLauncher-v2.0.apk" `
   --shell-apk "app\build\outputs\apk\debug\app-debug.apk" `
   --jdk "D:\DevTools\Java\jdk-21" `
@@ -79,10 +83,8 @@ python launcher-build.py `
 # 1. 自动扫描 Steam 目录、DLC、创意工坊与存档
 python dd-steam-converter\run.py detect
 
-# 2. 转换生成单文件数据包 dd_assets.pak（ZIP_STORED + ASTC 4x4 DDS + 重建 filelist.csv）
-python dd-steam-converter\run.py convert `
-  --base-apk "C:\path\to\base-dd.apk" `
-  --output "dist\dd_assets.pak"
+# 2. 转换生成单文件数据包 dd_assets.pak（自动加载 switch-runtime\switch-diff-layer.zip，亦可传 --switch-diff / --base-apk 覆盖）
+python dd-steam-converter\run.py convert --output "dist\dd_assets.pak"
 
 # 3. 逐条目校验 dd_assets.pak 压缩方式与所有 filelist.csv 字节精确匹配
 python dd-steam-converter\run.py verify "dist\dd_assets.pak"
@@ -124,7 +126,7 @@ python -m unittest discover -s dd-steam-converter\tests -v
 
 ```powershell
 python dd-steam-converter\run.py push `
-  --apk "dist\TorchLauncher-v2.0.apk" `
+  --apk "switch-runtime\TorchLauncher-v2.0.apk" `
   --pak "dist\dd_assets.pak"
 
 # 如需同时推送迁移包到手机 Download 目录供启动器内导入：

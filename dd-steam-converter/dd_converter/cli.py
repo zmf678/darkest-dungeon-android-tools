@@ -12,7 +12,7 @@ from .adb_push import list_devices, push_to_device
 from .apk_bundler import bundle_standalone_apk
 from .content_modifier import MOD_ID, ModifierConfig, generate_content_mod, pack_mod_zip
 from .migration import build_migration_zip
-from .pak_builder import BuildOptions, build_pak, verify_pak
+from .pak_builder import BuildOptions, build_pak, default_switch_diff_path, verify_pak
 from .save_editor import (
     add_trinket,
     batch_improve_heroes,
@@ -48,13 +48,19 @@ def cmd_convert(args: argparse.Namespace) -> int:
     if not steam_dir:
         raise SystemExit("Could not auto-detect Steam DarkestDungeon folder. Pass --steam-dir.")
 
+    base_apk = args.base_apk or default_switch_diff_path()
+    if not base_apk or not base_apk.is_file():
+        raise SystemExit(
+            "Could not find switch-runtime/switch-diff-layer.zip. Pass --switch-diff or --base-apk."
+        )
+
     def progress(stage: str, done: int, total: int) -> None:
         print(f"[{stage}] {done}/{total}", flush=True)
 
     res = build_pak(
         BuildOptions(
             steam_dir=steam_dir,
-            base_apk=args.base_apk,
+            base_apk=base_apk,
             output_pak=args.output,
             texture_mode=args.texture_mode,
             audio_source=args.audio_source,
@@ -238,8 +244,15 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--steam-root", type=Path)
     d.set_defaults(func=cmd_detect)
 
-    c = sub.add_parser("convert", help="Convert Steam resources + BYO base APK -> dd_assets.pak")
-    c.add_argument("--base-apk", type=Path, required=True)
+    c = sub.add_parser("convert", help="Convert Steam resources + Switch diff layer / base APK -> dd_assets.pak")
+    c.add_argument(
+        "--switch-diff",
+        "--base-apk",
+        dest="base_apk",
+        type=Path,
+        default=None,
+        help="Path to switch-runtime/switch-diff-layer.zip (auto-detected by default) or full Wicked 2.2.2 APK",
+    )
     c.add_argument("--output", type=Path, required=True)
     c.add_argument("--steam-dir", type=Path)
     c.add_argument("--steam-root", type=Path)
