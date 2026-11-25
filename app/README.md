@@ -18,6 +18,7 @@
 | [ArchiveStore.java](src/main/java/dev/torcharchive/dd/ArchiveStore.java) | 本地存档仓与模组预设仓：支持手动导入档位 ZIP、查看自动留档列表、保存/导出与管理本地 Mod ZIP 预设 |
 | [WorkshopSection.java](src/main/java/dev/torcharchive/dd/WorkshopSection.java) | 原生工坊搜索、详情、下载进度及公开 ZIP 入口，适配手机单列和平板双列 |
 | [WorkshopClient.java](src/main/java/dev/torcharchive/dd/WorkshopClient.java) | 读取 Steam 公开工坊页面与条目详情，通过 HTTPS 下载公开 ZIP |
+| [LauncherUpdates.java](src/main/java/dev/torcharchive/dd/LauncherUpdates.java) | 查询 GitHub 正式发行版，筛选 `TorchLauncher-v*.apk` 正式安装包并比较版本 |
 
 ### 2. 游戏引擎接入、存档与修改内核（`src/main/java/dev/torcharchive/game/`）
 

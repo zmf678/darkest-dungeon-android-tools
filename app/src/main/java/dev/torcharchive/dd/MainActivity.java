@@ -73,6 +73,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
     private LiveArchive live;
     private ModifierSection modifierSection;
     private WorkshopSection workshop;
+    private LauncherUpdates updates;
     private boolean workshopOpen;
     private SharedPreferences prefs;
     private FrameLayout outer;
@@ -116,6 +117,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         prefs = getSharedPreferences("folders", MODE_PRIVATE);
         display = Typeface.createFromAsset(getAssets(), "display.ttf");
         workshop = new WorkshopSection(this, store, display);
+        updates = new LauncherUpdates(this);
         if (saved != null) {
             tab = saved.getInt("tab");
             workshopOpen = saved.getBoolean("workshopOpen");
@@ -138,6 +140,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
 
     @Override protected void onStart() {
         super.onStart();
+        updates.checkOnStart();
         try {
             getContentResolver().registerContentObserver(dev.torcharchive.game.GameArchive.VERSIONS, false, captureObserver);
             observing = true;
@@ -234,6 +237,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
 
     @Override protected void onDestroy() {
         workshop.close();
+        updates.close();
         if (android.os.Build.VERSION.SDK_INT >= 33 && backCallback != null) {
             try {
                 getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
@@ -535,6 +539,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         weighted(secondRow, button("刷新状态检测", false, () -> refreshLive(true)), false);
         add(launchCard, secondRow, 8);
         root.addView(launchCard);
+        add(root, updates.build(), 14);
 
         // Quick overview grid
         LinearLayout overview = vertical();
@@ -626,7 +631,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         if (tab == 3 && !workshopOpen) redraw();
     }
 
-    void openWorkshopPage(String url) {
+    void openExternalPage(String url) {
         try {
             startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
         } catch (ActivityNotFoundException ex) {

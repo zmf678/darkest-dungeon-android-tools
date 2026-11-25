@@ -286,7 +286,7 @@ final class WorkshopSection {
         if (results == null) {
             LinearLayout state = state("工坊暂时不可用", failure);
             actions(state, host.button("重试", true, () -> loadPage(number, false)),
-                    host.button("打开 Steam", false, () -> host.openWorkshopPage(WorkshopClient.pageUrl(SORT[sort], query, number))));
+                    host.button("打开 Steam", false, () -> host.openExternalPage(WorkshopClient.pageUrl(SORT[sort], query, number))));
             body.addView(state);
             return;
         }
@@ -450,7 +450,7 @@ final class WorkshopSection {
         else if (detail != null && detail.download() != null) primary = host.button("下载到模组库", true, () -> confirmDownload(detail.download()));
         else primary = host.button("Steam 下载方法", true, this::steamInstructions);
         actions(detailActions, primary, host.button("打开 Steam 原页", false,
-                () -> host.openWorkshopPage(WorkshopClient.itemUrl(selected.id()))));
+                () -> host.openExternalPage(WorkshopClient.itemUrl(selected.id()))));
         if (entry == null && detail != null && detail.download() == null) {
             host.add(detailActions, host.type("此条目需在电脑 Steam 订阅后下载，再导入启动器。", 13, MUTED, Typeface.DEFAULT), 8);
         }
@@ -467,7 +467,7 @@ final class WorkshopSection {
                     ClipboardManager clipboard = (ClipboardManager) host.getSystemService(Context.CLIPBOARD_SERVICE);
                     clipboard.setPrimaryClip(ClipData.newPlainText("Steam 工坊条目 ID", item.id()));
                 })
-                .setPositiveButton("打开 Steam", (d, w) -> host.openWorkshopPage(WorkshopClient.itemUrl(item.id())))
+                .setPositiveButton("打开 Steam", (d, w) -> host.openExternalPage(WorkshopClient.itemUrl(item.id())))
                 .show();
     }
 
@@ -487,7 +487,7 @@ final class WorkshopSection {
             host.weighted(row, saved == null
                     ? host.button("下载模组", true, () -> confirmDownload(zip))
                     : host.button("打开已下载模组", true, () -> host.modDetails(saved)), true);
-            host.weighted(row, host.button("查看作者仓库", false, () -> host.openWorkshopPage(WorkshopClient.featuredPage())), false);
+            host.weighted(row, host.button("查看作者仓库", false, () -> host.openExternalPage(WorkshopClient.featuredPage())), false);
             host.add(featured, row, 12);
         } catch (IOException impossible) {
             host.add(featured, host.type("下载链接暂不可用。", 13, ERROR, Typeface.DEFAULT), 8);
