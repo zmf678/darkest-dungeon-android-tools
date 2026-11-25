@@ -81,15 +81,27 @@ class DsonAndConverterTests(unittest.TestCase):
         for _name, src in read_applied_mods(converted):
             self.assertEqual(src, "mod")
 
-    def test_dds_dxt3_encoder_header_and_size(self) -> None:
+    def test_dds_astc4x4_encoder_header_and_blocks(self) -> None:
+        # 1. Verify header dimensions & exact byte length
         img = Image.new("RGBA", (13, 9), (200, 120, 60, 180))
         dds = encode_rgba_to_dxt3_bytes(img)
         self.assertEqual(dds[:4], b"DDS ")
         h, w = struct.unpack_from("<II", dds, 12)
         self.assertEqual((w, h), (13, 9))
+        self.assertEqual(struct.unpack_from("<II", dds, 24), (1, 1))
         self.assertEqual(dds[84:88], b"DXT3")
         expected_blocks = ((13 + 3) // 4) * ((9 + 3) // 4)
         self.assertEqual(len(dds), 128 + expected_blocks * 16)
+        # Constant block must emit ASTC Void-Extent (0xFC 0xFD)
+        self.assertEqual(dds[128:130], b"\xfc\xfd")
+
+        # 2. Verify variable 4x4 block matches ground-truth Wicked ASTC 0x042 block bit-for-bit
+        import numpy as np
+        arr = np.zeros((4, 4, 4), dtype=np.uint8)
+        for r, c in ((1, 0), (1, 2), (2, 2), (3, 3)):
+            arr[r, c] = [123, 99, 56, 1]
+        blk_dds = encode_rgba_to_dxt3_bytes(Image.fromarray(arr, "RGBA"))
+        self.assertEqual(blk_dds[128:144].hex(), "428001f600c6007000020000030ccc00")
 
     @unittest.skipUnless(REAL_PROFILE_0.is_dir(), "Real Steam profile_0 fixture not present")
     def test_save_editor_and_migration_on_copy(self) -> None:

@@ -327,9 +327,12 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         ImageView mark = new ImageView(this);
         mark.setImageResource(R.drawable.archive_mark);
         top.addView(mark, new LinearLayout.LayoutParams(dp(38), dp(38)));
-        TextView name = type("暗黑地牢 · 余烬启动器", 20, INK, display);
+        TextView name = type("暗黑地牢 · 余烬启动器", 18, INK, display);
+        name.setSingleLine(true);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams nameWidth = new LinearLayout.LayoutParams(0, -2, 1);
         nameWidth.setMarginStart(dp(10));
+        nameWidth.setMarginEnd(dp(8));
         top.addView(name, nameWidth);
         if (gameRunning) {
             View stopBtn = button("结束游戏进程", false, () ->

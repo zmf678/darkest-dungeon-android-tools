@@ -213,18 +213,22 @@ def build(args, work: Path):
             zipfile.ZipFile(args.base_apk) as base_apk, \
             zipfile.ZipFile(unsigned, "w", allowZip64=allow_zip64) as bundle:
 
-        # 1. Copy compiled launcher shell entries (Manifest, res, resources.arsc, classes.dex, display.ttf, etc.)
+        # 1. Copy compiled launcher shell entries (Manifest, res, resources.arsc, all classes*.dex, display.ttf, etc.)
+        max_dex_idx = 1
         for entry in shell.infolist():
             if entry.filename.startswith("META-INF/"):
                 continue
             if entry.filename.startswith("lib/"):
                 continue
-            if entry.filename == "classes2.dex":
-                continue
+            m_dex = re.fullmatch(r"classes(\d*)\.dex", entry.filename)
+            if m_dex:
+                idx = int(m_dex.group(1)) if m_dex.group(1) else 1
+                max_dex_idx = max(max_dex_idx, idx)
             copy_entry(shell, bundle, entry.filename)
 
-        # 2. Wicked patched classes.dex -> classes2.dex
-        bundle.writestr("classes2.dex", wicked_dex_apk.read("classes.dex"), compress_type=zipfile.ZIP_DEFLATED)
+        # 2. Wicked patched classes.dex -> next available classes<N>.dex
+        wicked_dex_name = f"classes{max_dex_idx + 1}.dex"
+        bundle.writestr(wicked_dex_name, wicked_dex_apk.read("classes.dex"), compress_type=zipfile.ZIP_DEFLATED)
 
         # 3. Native libraries (all ZIP_STORED for Android M+ extractNativeLibs=false & 16KB page alignment)
         write_stored(bundle, "lib/arm64-v8a/libtorcharchive.so", native_lib.read_bytes())
