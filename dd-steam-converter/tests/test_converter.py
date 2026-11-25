@@ -15,7 +15,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from dd_converter.content_modifier import ModifierConfig, generate_content_mod, pack_mod_zip
-from dd_converter.dds_encoder import encode_rgba_to_dxt3_bytes
+from dd_converter.dds_encoder import encode_rgba_to_dxt3_bytes, find_astcenc, png_bytes_to_dds
 from dd_converter.dson import (
     convert_steam_mods_to_local,
     dd_hash,
@@ -102,6 +102,64 @@ class DsonAndConverterTests(unittest.TestCase):
             arr[r, c] = [123, 99, 56, 1]
         blk_dds = encode_rgba_to_dxt3_bytes(Image.fromarray(arr, "RGBA"))
         self.assertEqual(blk_dds[128:144].hex(), "428001f600c6007000020000030ccc00")
+
+        # 3. Round-trip ASTC decode check (catches Blue Contraction, weight inversion, CEM=8 & CEM=12 bugs)
+        try:
+            import texture2ddecoder
+        except ImportError:
+            return
+
+        # Test opaque descending warm ramp (historically triggered CEM=8/12 Blue Contraction)
+        ramp = np.zeros((16, 16, 4), dtype=np.uint8)
+        for y in range(16):
+            for x in range(16):
+                v = 255 - x * 16
+                ramp[y, x] = [v, int(v * 0.8), 255 - v, 255]
+        ramp_dds = encode_rgba_to_dxt3_bytes(Image.fromarray(ramp, "RGBA"))
+        dec_ramp = np.asarray(
+            Image.frombytes("RGBA", (16, 16), texture2ddecoder.decode_astc(ramp_dds[128:], 16, 16, 4, 4), "raw", "BGRA"),
+            dtype=np.int32,
+        )
+        ramp_mae = np.abs(ramp.astype(np.int32) - dec_ramp).mean(axis=(0, 1))
+        self.assertTrue(np.all(ramp_mae < 2.5), f"Opaque ramp MAE too high (Blue Contraction?): {ramp_mae}")
+
+        # Test alpha-varying warm ramp (CEM=12)
+        aramp = ramp.copy()
+        aramp[:, :, 3] = np.tile(np.linspace(0, 255, 16, dtype=np.uint8), (16, 1))
+        aramp_dds = encode_rgba_to_dxt3_bytes(Image.fromarray(aramp, "RGBA"))
+        dec_aramp = np.asarray(
+            Image.frombytes("RGBA", (16, 16), texture2ddecoder.decode_astc(aramp_dds[128:], 16, 16, 4, 4), "raw", "BGRA"),
+            dtype=np.int32,
+        )
+        aramp_mae = np.abs(aramp.astype(np.int32) - dec_aramp).mean(axis=(0, 1))
+        self.assertTrue(np.all(aramp_mae < 5.0), f"Alpha ramp MAE too high: {aramp_mae}")
+
+        # Test astcenc CLI path (both 1D RGBA ramp and 2D orthogonal gradient) if present
+        if find_astcenc():
+            with tempfile.TemporaryDirectory() as td:
+                p1 = Path(td) / "aramp.png"
+                Image.fromarray(aramp, "RGBA").save(p1)
+                cli_dds1 = png_bytes_to_dds(p1, prefer_texconv=True)
+                dec_cli1 = np.asarray(
+                    Image.frombytes("RGBA", (16, 16), texture2ddecoder.decode_astc(cli_dds1[128:], 16, 16, 4, 4), "raw", "BGRA"),
+                    dtype=np.int32,
+                )
+                cli_mae1 = np.abs(aramp.astype(np.int32) - dec_cli1).mean(axis=(0, 1))
+                self.assertTrue(np.all(cli_mae1 < 1.5), f"astcenc CLI ramp MAE too high: {cli_mae1}")
+
+                grid2d = np.zeros((16, 16, 4), dtype=np.uint8)
+                for y in range(16):
+                    for x in range(16):
+                        grid2d[y, x] = [255 - x * 16, 220 - y * 12, x * 8, y * 16]
+                p2 = Path(td) / "grid2d.png"
+                Image.fromarray(grid2d, "RGBA").save(p2)
+                cli_dds2 = png_bytes_to_dds(p2, prefer_texconv=True)
+                dec_cli2 = np.asarray(
+                    Image.frombytes("RGBA", (16, 16), texture2ddecoder.decode_astc(cli_dds2[128:], 16, 16, 4, 4), "raw", "BGRA"),
+                    dtype=np.int32,
+                )
+                cli_mae2 = np.abs(grid2d.astype(np.int32) - dec_cli2).mean(axis=(0, 1))
+                self.assertTrue(np.all(cli_mae2 < 10.0), f"astcenc CLI 2D MAE too high: {cli_mae2}")
 
     @unittest.skipUnless(REAL_PROFILE_0.is_dir(), "Real Steam profile_0 fixture not present")
     def test_save_editor_and_migration_on_copy(self) -> None:

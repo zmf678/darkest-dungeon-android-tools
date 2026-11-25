@@ -201,19 +201,27 @@ public final class DisplayConfig {
         int h = Math.min(MAX_H, Math.max(MIN_H, Math.min(rawW, rawH) & -2));
         Map<String, Preset> ordered = new LinkedHashMap<>();
 
-        addPreset(ordered, w, h, "本机原生全屏", aspectTag(w, h) + " · 无裁剪");
-
         // Fit 16:9 within device physical bounds
         int w169 = Math.min(w, ((int) Math.round(h * 16.0 / 9.0)) & -2);
         int h169 = ((int) Math.round(w169 * 9.0 / 16.0)) & -2;
-        if (w169 != w || h169 != h) {
-            addPreset(ordered, w169, h169, "本机等比 16:9 清晰档", "16:9 · 黄金比例");
+        boolean ultrawide = h > 0 && ((double) w / h) > 1.85;
+
+        if (ultrawide && (w169 != w || h169 != h)) {
+            addPreset(ordered, w169, h169, "本机等比 16:9 清晰档（推荐）", "16:9 · 黄金比例无拉伸");
+            addPreset(ordered, w, h, "本机原生全屏（宽屏拉伸）", aspectTag(w, h) + " · 铺满但会横向拉扁");
+        } else {
+            addPreset(ordered, w, h, "本机原生全屏", aspectTag(w, h) + " · 无裁剪");
+            if (w169 != w || h169 != h) {
+                addPreset(ordered, w169, h169, "本机等比 16:9 清晰档", "16:9 · 黄金比例无拉伸");
+            }
         }
 
-        // 75% high-DPI balanced preset (especially beneficial on 2.5K-3K tablets/phones)
-        int w75 = ((int) Math.round(w * 0.75)) & -2;
-        int h75 = ((int) Math.round(h * 0.75)) & -2;
-        if (w75 >= 1280 && h75 >= 720 && Math.abs(w - w75) >= 160) {
+        // 75% high-DPI balanced preset (use 16:9 base on ultrawide phones so UI stays undistorted)
+        int baseW = ultrawide ? w169 : w;
+        int baseH = ultrawide ? h169 : h;
+        int w75 = ((int) Math.round(baseW * 0.75)) & -2;
+        int h75 = ((int) Math.round(baseH * 0.75)) & -2;
+        if (w75 >= 1280 && h75 >= 720 && Math.abs(baseW - w75) >= 160) {
             addPreset(ordered, w75, h75, "均衡省电 75% 渲染", aspectTag(w75, h75) + " · 流畅兼顾");
         }
 
@@ -244,8 +252,15 @@ public final class DisplayConfig {
     private static int[] defaultResolutionForScreen(int rawW, int rawH) {
         int w = Math.max(rawW, rawH) & -2;
         int h = Math.min(rawW, rawH) & -2;
-        if (valid(w, h)) return new int[]{w, h};
-        return new int[]{DEFAULT_W, DEFAULT_H};
+        if (!valid(w, h)) return new int[]{DEFAULT_W, DEFAULT_H};
+        // Switch Darkest Dungeon renders a fixed 16:9 canvas stretched to LAYER_W x LAYER_H.
+        // On ultrawide phones (> 1.85:1), default to native-height 16:9 to avoid squashing.
+        if (h > 0 && ((double) w / h) > 1.85) {
+            int w169 = Math.min(w, ((int) Math.round(h * 16.0 / 9.0)) & -2);
+            int h169 = ((int) Math.round(w169 * 9.0 / 16.0)) & -2;
+            if (valid(w169, h169)) return new int[]{w169, h169};
+        }
+        return new int[]{w, h};
     }
 
     public static String aspectTag(int w, int h) {

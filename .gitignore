@@ -26,5 +26,6 @@ __pycache__/
 .torch-backups/
 dd-steam-converter/dist/
 dd-steam-converter/build/
+dd-steam-converter/bin/
 .env
 .env.*

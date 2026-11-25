@@ -1,4 +1,16 @@
-# 《暗黑地牢》自动存档、平板分辨率与模组直连实验版
+# game-patch（原生留档 Hook、Java 主机单测集与 v1 历史参考）
+
+> 返回导航：[工作区总索引](../INDEX.md) · [项目总览](../README.md) · [系统架构](../docs/ARCHITECTURE.md) · [构建测试指南](../docs/BUILD-AND-TEST.md)
+
+> **v2.0 架构说明**：从 **v2.0** 起，主线已升级为 [app/](../app/README.md) + [launcher-build.py](../launcher-build.py) 的**一体化单 APK 薄壳启动器**（游戏子进程 `:nx` 与启动器主进程同 UID 直连，不再需要双 APK 或跨应用 `ArchiveProvider`）。在 v2.0 中，本目录主要承担两项职责：
+> 1. **[native/commit.c](native/commit.c)**：由 [launcher-build.py](../launcher-build.py) 使用 NDK 编译为 `libtorcharchive.so`，用于 Hook 游戏存档提交后的 `nftw` 调用；
+> 2. **[test/dev/torcharchive/game/](test/dev/torcharchive/game/UnifiedEngineCheck.java)**：主机端 Java 自动化校验集（[DsonCodecCheck.java](test/dev/torcharchive/game/DsonCodecCheck.java)、[SnapshotStoreCheck.java](test/dev/torcharchive/game/SnapshotStoreCheck.java)、[UnifiedEngineCheck.java](test/dev/torcharchive/game/UnifiedEngineCheck.java)）。
+>
+> 下文保留原 v1 双包实验架构（`dev.torcharchive.ddgame` + `dev.torcharchive.dd.lab`）的说明作为历史参考。
+
+---
+
+# 《暗黑地牢》自动存档、平板分辨率与模组直连实验版（v1 历史参考）
 
 实验版以本机 Wicked Android 2.2.2 APK 为输入，通过独立包名（`dev.torcharchive.ddgame`）安装，并配合同签名「余烬档案馆」实验版（`dev.torcharchive.dd.lab`）提供三项扩展能力：
 

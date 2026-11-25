@@ -1,6 +1,8 @@
-# 《暗黑地牢》余烬一体化启动器 & Steam 转安卓工具链 (v2.0)
+# Darkest Dungeon Android Tools — 《暗黑地牢》余烬一体化启动器 & Steam 转安卓工具链 (v2.0)
 
-> **开源与版权合规声明（BYO 模式）**：本仓库**不包含任何第三方或受版权保护的游戏二进制文件、APK、`.so` 原生库、`exefs/main` 或游戏资源**。所有工具均需在本地指向您个人合法购买的正版 Steam《暗黑地牢》目录及本机自备的基础运行壳 APK。
+> **开源与版权合规声明（BYO 模式）**：本仓库（`darkest-dungeon-android-tools`）**不包含任何第三方或受版权保护的游戏二进制文件、APK、`.so` 原生库、`exefs/main` 或游戏资源**。所有工具均需在本地指向您个人合法购买的正版 Steam《暗黑地牢》目录及本机自备的基础运行壳 APK。
+
+> **文档与索引导航**：[工作区总索引 (INDEX.md)](INDEX.md) · [系统架构与纹理规范](docs/ARCHITECTURE.md) · [完整修改器指南](docs/MODIFIER-GUIDE.md) · [构建测试与排障](docs/BUILD-AND-TEST.md) · [Android 启动器模块](app/README.md) · [PC 转换器](dd-steam-converter/README.md) · [原生 Hook 与单测](game-patch/README.md)
 
 ---
 
@@ -10,12 +12,13 @@
    - 将「余烬档案馆」与游戏运行时合并为桌面唯一入口 **「暗黑地牢 · 余烬启动器」**（`dev.torcharchive.ddgame`）。
    - 游戏进程（`:nx`）与启动器主进程共享同一 Linux UID，彻底消除跨应用 `ContentProvider` 通信与 HyperOS `WakePathChecker` 拦截。
    - **A2-2 外置单包直读（默认）**：`PakMount.resolvePakPath()` 接管 `NxActivity.nxApk()`，直接从 `Android/media/dev.torcharchive.ddgame/dd_assets.pak`（`ZIP_STORED`）零解压偏移读取全部游戏资源；同时兼容 A1 单包内置模式。
-   - **全机型通用画面适配（`DisplayConfig`）**：运行时自动探测任意手机、平板、折叠屏物理分辨率，生成 4–6 组等比/高分/省电档位，支持「等比清晰 / 全屏铺满」与挖孔安全区避让。
+   - **全机型通用画面适配（`DisplayConfig`）**：运行时自动探测任意手机、平板、折叠屏物理分辨率，生成 4–6 组等比/高分/省电档位，支持「等比清晰 / 全屏铺满」与挖孔安全区避让；针对 `> 1.85:1` 超宽屏手机（如 20:9 / 22:9）默认自动回落本机高度对齐的 16:9 无拉伸分辨率并置于推荐首位，16:10 平板保留原生全屏。
    - **自动留档与直连原子回档（`GameArchive` / `SnapshotStore`）**：每次游戏保存自动生成快照，改档/回档前自动停止 `:nx` 进程并强制先行备份。
 
 2. **PC 端 Steam 资源转换与一键迁移（`dd-steam-converter/`）**
    - 自动扫描 Windows 注册表与 Steam `libraryfolders.vdf`，识别本体、已购 DLC、创意工坊 Mod（`262060`）和 `userdata` 存档。
-   - 内置多线程 `Pillow + NumPy` 向量化 DXT3/BC2 编码器（支持调用本机 `texconv`/`ffmpeg`），自动处理 `.png → .dds`、剔除 308 MB 俄语包 `overlay_ru`、处理音频兼容策略，并**100% 精确重建所有 `filelist.csv`**。
+   - 支持 **ASTC 4×4（DXT3 DDS 头封装，匹配 `libddnx.so`）双引擎纹理编码**：优先自动调用官方 ARM `astcenc`（放入 `dd-steam-converter/bin/` 或系统 `PATH`，画质达 51–55 dB PSNR，与原版无异）；无 `astcenc` 时自动回落至内置向量化 `Pillow + NumPy` 编码器（Void-Extent 纯色块 + `CEM=8` 3-bit 权重不透明块 + `CEM=12` 2-bit 权重透明块 + 最小二乘端点优化 + 防 Blue Contraction 约束，画质 41–44 dB PSNR）。
+   - 自动保留 980 个原始 LUT/调色 `.png`、剔除 308 MB 俄语包 `overlay_ru`、处理音频兼容策略，并**100% 精确重建全部 23 份 `filelist.csv`**。
    - 输出 `dd_assets.pak`（`ZIP_STORED` + `pak-manifest.json`）与 `steam-migration.zip`（自动将存档内 `source: Steam` 转为 `source: mod`），支持 ADB 一键推送与 `--build-apk`（A1 单包导出）。
 
 3. **游戏内容完整修改器（手机端内置 + PC 端配套）**
@@ -37,11 +40,14 @@
 ## 目录结构
 
 ```text
-├── app/                     # 余烬一体化启动器 Android 原创源码（含修改器 UI 与引擎层）
-├── game-patch/              # libtorcharchive.so (native/commit.c) 与主机端自动化单元测试
+├── INDEX.md                 # 工作区总索引与全量源码文件清单
+├── docs/                    # 系统架构（ARCHITECTURE）、修改器指南（MODIFIER-GUIDE）、构建测试（BUILD-AND-TEST）
+├── app/                     # 余烬一体化启动器 Android 原创源码（含修改器 UI 与引擎层，见 app/README.md）
+├── game-patch/              # libtorcharchive.so (native/commit.c)、主机端自动化单测与 v1 历史参考
 ├── launcher-build.py        # 薄壳 APK 组装脚本（提取壳 + 4 处最小 Smali Hook + 16KB 对齐签名）
 ├── dd-steam-converter/      # PC 端 Steam 资源转换器、DSON 迁移、ADB 推送与完整桌面修改器
 ├── DESIGN.md                # 视觉与交互设计规范
+├── PRODUCT.md               # 初始产品定位简述
 └── README.md
 ```
 
@@ -99,6 +105,6 @@ python dd-steam-converter\run.py gui
 ### 3. 自动化测试
 
 ```powershell
-# Python 单元测试（DSON 往返、DXT3 编码、迁移、存档修改器、内容修改器）
+# Python 单元测试（DSON 往返、ASTC 4x4 DDS 编码、迁移、存档修改器、内容修改器）
 python -m unittest discover -s dd-steam-converter\tests -v
 ```
