@@ -1,8 +1,25 @@
 # Darkest Dungeon Android Tools — 《暗黑地牢》余烬一体化启动器 & Steam 转安卓工具链 (v2.0)
 
-> **开源与版权合规声明（BYO 模式）**：本仓库（`darkest-dungeon-android-tools`）**不包含任何第三方或受版权保护的游戏二进制文件、APK、`.so` 原生库、`exefs/main` 或游戏资源**。所有工具均需在本地指向您个人合法购买的正版 Steam《暗黑地牢》目录及本机自备的基础运行壳 APK。
+> **开源与版权合规声明（BYO 模式）**：本仓库（`darkest-dungeon-android-tools`）**不包含任何第三方或受版权保护的游戏二进制文件、APK、游戏原生库、`exefs/main` 或游戏资源**。Release 中的 `TorchLauncher-Shell-*.apk` 仅包含本仓库原创开源外壳与原创 7.5 KB Hook 库 `libtorcharchive.so`，**不能单独直接安装运行游戏**，需按下方三步流程在本地结合您自备的正版 Steam 目录与匹配基础壳 APK 完成组装。
 
 > **文档与索引导航**：[工作区总索引 (INDEX.md)](INDEX.md) · [系统架构与纹理规范](docs/ARCHITECTURE.md) · [完整修改器指南](docs/MODIFIER-GUIDE.md) · [构建测试与排障](docs/BUILD-AND-TEST.md) · [Android 启动器模块](app/README.md) · [PC 转换器](dd-steam-converter/README.md) · [原生 Hook 与单测](game-patch/README.md)
+
+---
+
+## 使用前必读：前置条件与三步上手清单
+
+### 你需要先准备什么
+1. **本机已安装的正版 Steam《暗黑地牢》目录**（用于转换贴图/DLC 资源以及迁移存档与创意工坊 Mod）。
+2. **本机自备的匹配 Wicked 2.2.2 基础 APK**（[launcher-build.py](launcher-build.py) 会校验其 SHA-256：`0b84730f...a619410`，用于提取底层运行时核心与 Switch 界面覆写层）。
+3. **PC 端基础工具**（下载 [Release](https://github.com/zmf678/darkest-dungeon-android-tools/releases/latest) 的 `TorchLauncher-Shell-v2.0.0.apk` 后，**不需要安装 Gradle、Android SDK Platform 或 Android NDK**）：
+   - Python 3.10+（执行 `pip install -r dd-steam-converter\requirements.txt`）；
+   - JDK 21、`apktool.jar`、Android Build Tools（仅需 `zipalign` 与 `apksigner.jar`）及任意签名密钥（如 `debug.keystore`）；
+   - （强烈推荐）从 [ARM astc-encoder Releases](https://github.com/ARM-software/astc-encoder/releases) 下载 `astcenc-avx2.exe`（或 `astcenc`）放入 `dd-steam-converter\bin\`，可将贴图画质拉满至原版 51–55 dB PSNR。
+
+### 三步跑通安卓真机
+1. **组装约 15 MB 的薄壳启动器 APK（免 Gradle / 免 NDK）**：下载 Release 的 `TorchLauncher-Shell-v2.0.0.apk`，运行 `launcher-build.py` 注入本地基础壳生成 `dist\TorchLauncher-v2.0.apk`。
+2. **转换正版 Steam 资源为单文件包**：运行 `python dd-steam-converter\run.py convert --base-apk <基础APK> --output dist\dd_assets.pak`（可选同时运行 `migrate` 打包 Steam 存档与创意工坊 Mod）。
+3. **安装并推送到手机/平板**：手机开启 USB 调试后运行 `python dd-steam-converter\run.py push --apk dist\TorchLauncher-v2.0.apk --pak dist\dd_assets.pak`，打开桌面「暗黑地牢 · 余烬启动器」点「开始游戏」即可。
 
 ---
 
@@ -58,10 +75,21 @@
 ### 1. 构建一体化薄壳启动器 APK（约 15 MB）
 
 ```powershell
-# 1) 编译启动器外壳（需要 Android SDK 36 + JDK 21）
-gradle --offline :app:assembleDebug :app:lintDebug
+# 方式 A（推荐，免 Gradle / 免 Android SDK / 免 NDK）：
+# 直接下载 GitHub Release 的 TorchLauncher-Shell-v2.0.0.apk（已内置原创 libtorcharchive.so）
+python launcher-build.py `
+  "C:\path\to\base-dd.apk" `
+  "dist\TorchLauncher-v2.0.apk" `
+  --shell-apk "TorchLauncher-Shell-v2.0.0.apk" `
+  --jdk "D:\DevTools\Java\jdk-21" `
+  --build-tools "D:\Android\build-tools\36.0.0" `
+  --apktool "D:\DevTools\apktool\apktool.jar" `
+  --keystore "C:\Users\<user>\.android\debug.keystore" `
+  --key-alias androiddebugkey `
+  --key-password pass:android
 
-# 2) 组装薄壳 APK（指向您本机自备的基础运行壳 APK）
+# 方式 B（从源码全量自编，需 Android SDK 36 + JDK 21 + NDK）：
+gradle --offline :app:assembleDebug :app:lintDebug
 python launcher-build.py `
   "C:\path\to\base-dd.apk" `
   "dist\TorchLauncher-v2.0.apk" `
@@ -70,7 +98,7 @@ python launcher-build.py `
   --build-tools "D:\Android\build-tools\36.0.0" `
   --ndk "D:\Android\ndk\28.2.13676358" `
   --apktool "D:\DevTools\apktool\apktool.jar" `
-  --keystore "C:\Users\36134\.android\debug.keystore" `
+  --keystore "C:\Users\<user>\.android\debug.keystore" `
   --key-alias androiddebugkey `
   --key-password pass:android
 ```

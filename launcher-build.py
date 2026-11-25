@@ -187,6 +187,26 @@ def run_gradle_shell(args) -> Path:
     return apk
 
 
+def resolve_native_commit(args, shell_apk: Path, work: Path) -> Path:
+    if args.native_lib:
+        if not args.native_lib.is_file():
+            raise FileNotFoundError(f"Missing --native-lib file: {args.native_lib}")
+        return args.native_lib
+    if args.ndk:
+        return compile_native_commit(args.ndk, work)
+    with zipfile.ZipFile(shell_apk) as shell:
+        lib_entry = "lib/arm64-v8a/libtorcharchive.so"
+        if lib_entry in shell.namelist():
+            extracted = work / "libtorcharchive.so"
+            extracted.write_bytes(shell.read(lib_entry))
+            print("Using prebuilt open-source libtorcharchive.so from --shell-apk (no NDK required).", flush=True)
+            return extracted
+    raise SystemExit(
+        "Need libtorcharchive.so: pass --ndk to compile from source, --native-lib <path>, "
+        "or use a Release --shell-apk that bundles lib/arm64-v8a/libtorcharchive.so."
+    )
+
+
 def build(args, work: Path):
     java = args.jdk / ("bin/java.exe" if os.name == "nt" else "bin/java")
     skeleton = work / "wicked-code.apk"
@@ -202,9 +222,8 @@ def build(args, work: Path):
     patch_wicked_smali(project)
     run(java, "-jar", args.apktool, "b", "-q", "-o", rebuilt_wicked, project)
 
-    native_lib = compile_native_commit(args.ndk, work)
-
     shell_apk = args.shell_apk if args.shell_apk else run_gradle_shell(args)
+    native_lib = resolve_native_commit(args, shell_apk, work)
 
     unsigned = work / "unsigned.apk"
     allow_zip64 = args.bundle_pak is not None
@@ -279,7 +298,8 @@ def main():
     parser.add_argument("--jdk", type=Path, required=True)
     parser.add_argument("--sdk", type=Path)
     parser.add_argument("--build-tools", type=Path, required=True)
-    parser.add_argument("--ndk", type=Path, required=True)
+    parser.add_argument("--ndk", type=Path, help="Optional Android NDK path (omit if --shell-apk bundles libtorcharchive.so)")
+    parser.add_argument("--native-lib", type=Path, help="Optional prebuilt open-source libtorcharchive.so path")
     parser.add_argument("--apktool", type=Path, required=True)
     parser.add_argument("--keystore", type=Path, required=True)
     parser.add_argument("--key-alias", required=True)

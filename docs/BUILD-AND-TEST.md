@@ -40,6 +40,23 @@ gradle --offline :app:assembleDebug :app:lintDebug
 
 ### 2.2 组装薄壳启动器 APK（A2-2 模式，约 15 MB）
 
+若直接下载 GitHub Release 提供的 `TorchLauncher-Shell-v2.0.0.apk`（已内置本仓库原创 7.5 KB 的 `libtorcharchive.so`），可省略 `--ndk` 与上面的 Gradle 步骤，直接运行：
+
+```powershell
+python launcher-build.py `
+  "C:\path\to\base-dd.apk" `
+  "dist\TorchLauncher-v2.0.apk" `
+  --shell-apk "TorchLauncher-Shell-v2.0.0.apk" `
+  --jdk "D:\DevTools\Java\jdk-21" `
+  --build-tools "D:\path\to\android-sdk\build-tools\36.0.0" `
+  --apktool "D:\path\to\apktool.jar" `
+  --keystore "C:\Users\<user>\.android\debug.keystore" `
+  --key-alias androiddebugkey `
+  --key-password pass:android
+```
+
+如需从源码重新编译 `libtorcharchive.so`（搭配本地 `:app:assembleDebug` 产物），追加 `--ndk` 即可：
+
 ```powershell
 python launcher-build.py `
   "C:\path\to\base-dd.apk" `
