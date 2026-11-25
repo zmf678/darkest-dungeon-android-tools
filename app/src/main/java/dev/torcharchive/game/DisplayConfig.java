@@ -1,5 +1,6 @@
 package dev.torcharchive.game;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Point;
@@ -7,7 +8,10 @@ import android.graphics.Rect;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.Display;
+import android.view.Surface;
 import android.view.View;
+import android.view.Window;
 import android.view.WindowManager;
 
 import org.json.JSONArray;
@@ -21,13 +25,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
- * Universal device resolution detector and aspect-ratio controller injected into NxActivity.
+ * Universal device resolution detector, high-refresh-rate controller (60/90/120Hz/Auto),
+ * and aspect-ratio adapter injected into NxActivity.
  */
 public final class DisplayConfig {
     private static final String TAG = "TorchArchive";
@@ -35,6 +43,7 @@ public final class DisplayConfig {
     private static final String KEY_H = "display_h";
     private static final String KEY_FILL = "fill_screen";
     private static final String KEY_CUTOUT = "avoid_cutout";
+    private static final String KEY_FPS = "refresh_rate"; // 0=Auto(Max), 60, 90, 120
     private static final int MIN_W = 640, MAX_W = 4096;
     private static final int MIN_H = 360, MAX_H = 2560;
     private static final int DEFAULT_W = 1920, DEFAULT_H = 1080;
@@ -118,9 +127,180 @@ public final class DisplayConfig {
         return GameArchive.state(context).getBoolean(KEY_CUTOUT, true);
     }
 
+    /**
+     * Configured refresh rate preference: 0 = Auto (device max), 60, 90, or 120.
+     */
+    public static int getPreferredRefreshRate(Context context) {
+        int val = GameArchive.state(context).getInt(KEY_FPS, 60);
+        return sanitizeRefreshRate(val);
+    }
+
+    public static int sanitizeRefreshRate(int val) {
+        if (val == 0 || val == 60 || val == 90 || val == 120) return val;
+        if (val >= 110) return 120;
+        if (val >= 80) return 90;
+        return 60;
+    }
+
+    /**
+     * Resolves the concrete target FPS (60..144) to feed into Window mode, Surface.setFrameRate,
+     * and native libddnx.so frame pacing.
+     */
+    public static int resolveTargetFps(Context context) {
+        int pref = getPreferredRefreshRate(context);
+        int maxHz = maxSupportedRefreshRate(context);
+        if (pref == 0) {
+            return Math.max(60, Math.min(165, maxHz));
+        }
+        return Math.max(60, Math.min(165, pref));
+    }
+
+    @SuppressWarnings("deprecation")
+    public static int[] supportedRefreshRates(Context context) {
+        Set<Integer> rates = new TreeSet<>();
+        try {
+            Display display = resolveDisplay(context);
+            if (display != null) {
+                Display.Mode cur = display.getMode();
+                Display.Mode[] modes = display.getSupportedModes();
+                if (modes != null) {
+                    for (Display.Mode m : modes) {
+                        if (cur != null
+                                && m.getPhysicalWidth() == cur.getPhysicalWidth()
+                                && m.getPhysicalHeight() == cur.getPhysicalHeight()) {
+                            int hz = Math.round(m.getRefreshRate());
+                            if (hz >= 59 && hz <= 240) rates.add(hz);
+                        }
+                    }
+                }
+                if (rates.isEmpty() && cur != null) {
+                    rates.add(Math.max(60, Math.round(cur.getRefreshRate())));
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        if (rates.isEmpty()) rates.add(60);
+        int[] out = new int[rates.size()];
+        int i = 0;
+        for (int r : rates) out[i++] = r;
+        return out;
+    }
+
+    public static int maxSupportedRefreshRate(Context context) {
+        int[] rates = supportedRefreshRates(context);
+        return rates.length == 0 ? 60 : rates[rates.length - 1];
+    }
+
+    /**
+     * Injected into NxActivity.panelAt60() to honor user-selected 60/90/120Hz/Auto refresh rate
+     * instead of forcing high-refresh panels down to 60 Hz.
+     */
+    @SuppressWarnings("deprecation")
+    public static void applyRefreshRate(Activity activity) {
+        if (activity == null) return;
+        try {
+            int targetHz = resolveTargetFps(activity);
+            Display display = resolveDisplay(activity);
+            if (display == null) return;
+            Display.Mode current = display.getMode();
+            Display.Mode[] modes = display.getSupportedModes();
+            Display.Mode chosen = null;
+            float bestDiff = Float.MAX_VALUE;
+            if (modes != null && current != null) {
+                for (Display.Mode m : modes) {
+                    if (m.getPhysicalWidth() != current.getPhysicalWidth()
+                            || m.getPhysicalHeight() != current.getPhysicalHeight()) {
+                        continue;
+                    }
+                    float hz = m.getRefreshRate();
+                    float diff = Math.abs(hz - targetHz);
+                    // Prefer modes that don't exceed targetHz when equidistant
+                    if (diff < bestDiff - 0.05f
+                            || (Math.abs(diff - bestDiff) <= 0.05f && chosen != null && hz <= targetHz + 1.5f && chosen.getRefreshRate() > targetHz + 1.5f)) {
+                        bestDiff = diff;
+                        chosen = m;
+                    }
+                }
+            }
+            Window window = activity.getWindow();
+            if (window == null) return;
+            WindowManager.LayoutParams lp = window.getAttributes();
+            boolean changed = false;
+            if (chosen != null) {
+                if (lp.preferredDisplayModeId != chosen.getModeId()) {
+                    lp.preferredDisplayModeId = chosen.getModeId();
+                    changed = true;
+                }
+                if (Math.abs(lp.preferredRefreshRate - chosen.getRefreshRate()) > 0.5f) {
+                    lp.preferredRefreshRate = chosen.getRefreshRate();
+                    changed = true;
+                }
+            } else if (Math.abs(lp.preferredRefreshRate - targetHz) > 0.5f) {
+                lp.preferredRefreshRate = targetHz;
+                changed = true;
+            }
+            if (Build.VERSION.SDK_INT >= 28) {
+                int cutoutMode = isAvoidCutout(activity)
+                        ? WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_NEVER
+                        : WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                if (lp.layoutInDisplayCutoutMode != cutoutMode) {
+                    lp.layoutInDisplayCutoutMode = cutoutMode;
+                    changed = true;
+                }
+            }
+            if (changed) {
+                window.setAttributes(lp);
+            }
+            Log.i("dd", String.format(Locale.ROOT,
+                    "nx: display %.1f Hz -> mode %d at %.1f Hz (target=%d Hz)",
+                    current != null ? current.getRefreshRate() : 60f,
+                    chosen != null ? chosen.getModeId() : -1,
+                    chosen != null ? chosen.getRefreshRate() : (float) targetHz,
+                    targetHz));
+        } catch (Throwable error) {
+            Log.w("dd", "nx: failed to apply display refresh rate", error);
+        }
+    }
+
+    /**
+     * Injected into NxActivity.surfaceChanged() on Android 11+ (API 30+) to notify SurfaceFlinger
+     * and LTPO panels of the chosen refresh rate.
+     */
+    public static void applySurfaceFrameRate(Context context, Surface surface) {
+        if (context == null || surface == null || !surface.isValid()) return;
+        if (Build.VERSION.SDK_INT < 30) return;
+        try {
+            int targetHz = resolveTargetFps(context);
+            if (Build.VERSION.SDK_INT >= 31) {
+                surface.setFrameRate((float) targetHz, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE,
+                        Surface.CHANGE_FRAME_RATE_ALWAYS);
+            } else {
+                surface.setFrameRate((float) targetHz, Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE);
+            }
+            Log.i("dd", "nx: surface setFrameRate=" + targetHz + " Hz");
+        } catch (Throwable error) {
+            Log.w("dd", "nx: surface setFrameRate failed", error);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private static Display resolveDisplay(Context context) {
+        try {
+            if (Build.VERSION.SDK_INT >= 30 && context instanceof Activity) {
+                Display d = context.getDisplay();
+                if (d != null) return d;
+            }
+            WindowManager wm = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
+            if (wm != null) return wm.getDefaultDisplay();
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
     public static Bundle describe(Context context) {
         int[] current = resolveResolution(context);
         int[] screen = screenSize(context);
+        int[] rates = supportedRefreshRates(context);
         Bundle reply = new Bundle();
         reply.putInt("width", current[0]);
         reply.putInt("height", current[1]);
@@ -128,16 +308,25 @@ public final class DisplayConfig {
         reply.putBoolean("avoid_cutout", isAvoidCutout(context));
         reply.putInt("screen_w", screen[0]);
         reply.putInt("screen_h", screen[1]);
+        reply.putInt("refresh_rate", getPreferredRefreshRate(context));
+        reply.putInt("effective_fps", resolveTargetFps(context));
+        reply.putInt("max_refresh_rate", rates.length == 0 ? 60 : rates[rates.length - 1]);
+        reply.putIntArray("supported_rates", rates);
         return reply;
     }
 
     public static Bundle apply(Context context, int width, int height, boolean fillScreen) throws IOException {
-        return apply(context, width, height, fillScreen, isAvoidCutout(context));
+        return apply(context, width, height, fillScreen, isAvoidCutout(context), getPreferredRefreshRate(context));
     }
 
     public static Bundle apply(Context context, int width, int height, boolean fillScreen, boolean avoidCutout) throws IOException {
+        return apply(context, width, height, fillScreen, avoidCutout, getPreferredRefreshRate(context));
+    }
+
+    public static Bundle apply(Context context, int width, int height, boolean fillScreen, boolean avoidCutout, int refreshRate) throws IOException {
         int w = width & -2;
         int h = height & -2;
+        int fps = sanitizeRefreshRate(refreshRate);
         if (!valid(w, h)) {
             throw new IOException("不支持的分辨率: " + width + "x" + height);
         }
@@ -187,6 +376,7 @@ public final class DisplayConfig {
                 .putInt(KEY_H, h)
                 .putBoolean(KEY_FILL, fillScreen)
                 .putBoolean(KEY_CUTOUT, avoidCutout)
+                .putInt(KEY_FPS, fps)
                 .commit()) {
             throw new IOException("保存显示模式失败");
         }

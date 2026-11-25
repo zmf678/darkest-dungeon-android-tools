@@ -33,6 +33,13 @@ public final class GameArchive {
             System.loadLibrary("torcharchive");
             int result = installCommitCallback();
             if (result != 0) throw new IOException("Commit callback was not installed (" + result + ")");
+            int targetFps = DisplayConfig.resolveTargetFps(context);
+            try {
+                int fpsRes = setNativeTargetFps(targetFps);
+                Log.i(TAG, "Native target FPS set to " + targetFps + " Hz (rc=" + fpsRes + ")");
+            } catch (Throwable fpsErr) {
+                Log.w(TAG, "Could not apply native target FPS " + targetFps, fpsErr);
+            }
             setCaptureState("ready", "");
         } catch (Exception | LinkageError error) {
             captureError(error);
@@ -40,6 +47,7 @@ public final class GameArchive {
     }
 
     private static native int installCommitCallback();
+    private static native int setNativeTargetFps(int targetFps);
 
     private static synchronized void afterCommit() {
         try {

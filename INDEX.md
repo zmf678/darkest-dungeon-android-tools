@@ -44,7 +44,7 @@
 
 | 文件 | 体积 | 用途说明 |
 | :--- | :---: | :--- |
-| [TorchLauncher-v2.0.apk](switch-runtime/TorchLauncher-v2.0.apk) | 14.87 MB | 预组装、16 KB 对齐且已签名的余烬一体化薄壳启动器（含启动器 UI、4 处 Smali Hook、`libtorcharchive.so` 与 Wicked Switch 运行时壳），可直接 `adb install` 或 `run.py push` 安装 |
+| [TorchLauncher-v2.1.apk](switch-runtime/TorchLauncher-v2.1.apk) | 14.90 MB | 预组装、16 KB 对齐且已签名的余烬一体化薄壳启动器 v2.1.0（`versionCode=40`，含深色修改器二级页、60/90/120 Hz 高刷三层适配、6 处 Smali Hook、新版 `libtorcharchive.so` 与 Wicked Switch 运行时壳），可直接安装或原地覆盖 v1/v2.0 |
 | [wicked-runtime-shell.apk](switch-runtime/wicked-runtime-shell.apk) | 9.01 MB | 从 Wicked 2.2.2 基础 APK 抽取的精简 Switch 运行时壳（`AndroidManifest.xml`、`resources.arsc`、`res/`、`classes.dex`、4 个 `arm64-v8a/*.so` 与 5 个辅助小资产），供 `launcher-build.py` 源码重编使用 |
 | [switch-diff-layer.zip](switch-runtime/switch-diff-layer.zip) | 38.01 MB | Switch 游戏主程序（`assets/nx/exefs/main`）+ Switch 触屏/UI 覆写差异层（`assets/nx/overlay/`，已剔除 `overlay_ru/`）+ 23 份 `filelist.csv` + 5 份 `dlc_info.csv` + 39 项 Switch 专属 `romfs/` 差异件与 DLC `.loc` 兼容件，由 `dd-steam-converter` 自动识别 |
 | [SHA256SUMS.txt](switch-runtime/SHA256SUMS.txt) | < 1 KB | 上述 3 个内置二进制包的精确 SHA-256 校验清单 |

@@ -1,6 +1,6 @@
-# Darkest Dungeon Android Tools — 《暗黑地牢》余烬一体化启动器 & Steam 转安卓工具链 (v2.0)
+# Darkest Dungeon Android Tools — 《暗黑地牢》余烬一体化启动器 & Steam 转安卓工具链 (v2.1)
 
-> **私有仓库内置运行层说明**：本仓库现为**私有仓库**，已在 [switch-runtime/](switch-runtime/) 目录直接内置精简后的 **Switch 运行时壳**（预组装可直装的 `TorchLauncher-v2.0.apk` 与供源码重编译用的 `wicked-runtime-shell.apk`）及 **Switch 游戏主程序与触屏差异层**（`switch-diff-layer.zip`，含 `exefs/main`、`overlay/` 触屏界面层、23 份 `filelist.csv`、`dlc_info.csv` 与 Switch 专属兼容件）。日常使用与构建均**不再需要额外寻找 3.8 GB 原版基础 APK**，只需本机正版 Steam《暗黑地牢》目录即可完成转换与部署；请勿将本仓库重新设为公开。
+> **私有仓库内置运行层说明**：本仓库现为**私有仓库**，已在 [switch-runtime/](switch-runtime/) 目录直接内置精简后的 **Switch 运行时壳**（预组装可直装的 `TorchLauncher-v2.1.apk` 与供源码重编译用的 `wicked-runtime-shell.apk`）及 **Switch 游戏主程序与触屏差异层**（`switch-diff-layer.zip`，含 `exefs/main`、`overlay/` 触屏界面层、23 份 `filelist.csv`、`dlc_info.csv` 与 Switch 专属兼容件）。日常使用与构建均**不再需要额外寻找 3.8 GB 原版基础 APK**，只需本机正版 Steam《暗黑地牢》目录即可完成转换与部署；请勿将本仓库重新设为公开。
 
 > **文档与索引导航**：[工作区总索引 (INDEX.md)](INDEX.md) · [系统架构与纹理规范](docs/ARCHITECTURE.md) · [完整修改器指南](docs/MODIFIER-GUIDE.md) · [构建测试与排障](docs/BUILD-AND-TEST.md) · [Android 启动器模块](app/README.md) · [PC 转换器](dd-steam-converter/README.md) · [原生 Hook 与单测](game-patch/README.md)
 
@@ -10,7 +10,7 @@
 
 ### 你需要先准备什么
 1. **本机已安装的正版 Steam《暗黑地牢》目录**（用于转换本体/已购 DLC 贴图、音频、配置，以及迁移存档与创意工坊 Mod）。
-2. **PC 端 Python 环境**（日常直接使用仓库内置的 [switch-runtime/TorchLauncher-v2.0.apk](switch-runtime/TorchLauncher-v2.0.apk) 与 [switch-runtime/switch-diff-layer.zip](switch-runtime/switch-diff-layer.zip)，**无需安装 Gradle、JDK、Android SDK、Android NDK 或 apktool**）：
+2. **PC 端 Python 环境**（日常直接使用仓库内置的 [switch-runtime/TorchLauncher-v2.1.apk](switch-runtime/TorchLauncher-v2.1.apk) 与 [switch-runtime/switch-diff-layer.zip](switch-runtime/switch-diff-layer.zip)，**无需安装 Gradle、JDK、Android SDK、Android NDK 或 apktool**）：
    - Python 3.10+（执行 `pip install -r dd-steam-converter\requirements.txt`）；
    - （强烈推荐）从 [ARM astc-encoder Releases](https://github.com/ARM-software/astc-encoder/releases) 下载 `astcenc-avx2.exe`（或 `astcenc`）放入 `dd-steam-converter\bin\`，可将贴图画质拉满至原版 51–55 dB PSNR；
    - （可选）若需把 Steam 过场 `.ogv` 转码为 `.mp4`，在系统 `PATH` 中安装 `ffmpeg`。
@@ -19,7 +19,7 @@
 ### 两步跑通安卓真机
 1. **转换正版 Steam 资源为单文件包**（自动读取仓库内 `switch-runtime\switch-diff-layer.zip`）：
    运行 `python dd-steam-converter\run.py convert --output dist\dd_assets.pak`（可选同时运行 `migrate` 打包 Steam 存档与创意工坊 Mod）。
-2. **安装并推送到手机/平板**：手机开启 USB 调试后运行 `python dd-steam-converter\run.py push --apk switch-runtime\TorchLauncher-v2.0.apk --pak dist\dd_assets.pak`，打开桌面「暗黑地牢 · 余烬启动器」点「开始游戏」即可。
+2. **安装并推送到手机/平板**：手机开启 USB 调试后运行 `python dd-steam-converter\run.py push --apk switch-runtime\TorchLauncher-v2.1.apk --pak dist\dd_assets.pak`，打开桌面「暗黑地牢 · 余烬启动器」点「开始游戏」即可。
 
 ---
 
@@ -29,7 +29,7 @@
    - 将「余烬档案馆」与游戏运行时合并为桌面唯一入口 **「暗黑地牢 · 余烬启动器」**（`dev.torcharchive.ddgame`）。
    - 游戏进程（`:nx`）与启动器主进程共享同一 Linux UID，彻底消除跨应用 `ContentProvider` 通信与 HyperOS `WakePathChecker` 拦截。
    - **A2-2 外置单包直读（默认）**：`PakMount.resolvePakPath()` 接管 `NxActivity.nxApk()`，直接从 `Android/media/dev.torcharchive.ddgame/dd_assets.pak`（`ZIP_STORED`）零解压偏移读取全部游戏资源；同时兼容 A1 单包内置模式。
-   - **全机型通用画面适配（`DisplayConfig`）**：运行时自动探测任意手机、平板、折叠屏物理分辨率，生成 4–6 组等比/高分/省电档位，支持「等比清晰 / 全屏铺满」与挖孔安全区避让；针对 `> 1.85:1` 超宽屏手机（如 20:9 / 22:9）默认自动回落本机高度对齐的 16:9 无拉伸分辨率并置于推荐首位，16:10 平板保留原生全屏。
+   - **全机型通用画面与 60 / 90 / 120 Hz 高刷适配（`DisplayConfig` + 原生控帧补丁）**：运行时自动探测任意手机、平板、折叠屏物理分辨率与面板支持刷新率，生成 4–6 组等比/高分/省电档位，支持「等比清晰 / 全屏铺满」与挖孔安全区避让；新增 **60 / 90 / 120 Hz / 自动最高（最高 165 Hz）** 高刷切换，同步接管 `Display.Mode`、`Surface.setFrameRate` 与 `libddnx.so` 原生 `nx_eglSwapBuffers` 控帧上限，解除原包 60 Hz 锁帧。
    - **自动留档与直连原子回档（`GameArchive` / `SnapshotStore`）**：每次游戏保存自动生成快照，改档/回档前自动停止 `:nx` 进程并强制先行备份。
 
 2. **PC 端 Steam 资源转换与一键迁移（`dd-steam-converter/`）**
@@ -38,19 +38,15 @@
    - 自动保留 980 个原始 LUT/调色 `.png`、剔除 308 MB 俄语包 `overlay_ru`、处理音频兼容策略，并**100% 精确重建全部 23 份 `filelist.csv`**。
    - 输出 `dd_assets.pak`（`ZIP_STORED` + `pak-manifest.json`）与 `steam-migration.zip`（自动将存档内 `source: Steam` 转为 `source: mod`），支持 ADB 一键推送与 `--build-apk`（A1 单包导出）。
 
-3. **游戏内容完整修改器（手机端内置 + PC 端配套）**
+3. **游戏内容完整修改器（手机端深色余烬工坊 + 二级详情页 + PC 端配套）**
    - **全维度二进制存档修改器（`SaveEditor` / `save_editor.py`）**：
-     - 庄园名称、游戏模式（`radiant` / `darkest` / `new_game_plus`）、金币/传家宝/彗星碎片/建筑蓝图编辑与一键拉满；
-     - **全英雄嵌套 DSON 编辑**：读取与修改 `persist.roster.json` 内每个英雄的嵌入式二进制 DSON（名称、当前生命、压力值、决心等级 XP、武器/护甲等级、美德/折磨、复活阵亡英雄、怪癖锁定/添加与疾病清除）；
-     - 饰品仓库自由增删（内置全流派先祖/极稀有/星晶/boss 奖杯图鉴或自定义 ID）；
-     - 城镇全部 8 座建筑升级一键全解锁（`persist.upgrades.json`）与各地牢区域 XP 修改；
-     - **全字段原始 DSON 树状编辑器**：可浏览并修改任意 `persist.*.json` 任意标量字段，所有写档均强制先拍快照并通过往返结构自检。
+     - 顶部档位 KPI 概览卡（金币/传家宝/英雄/饰品）、2 列紧凑货币网格与 `+10万金币 / +100传家宝 / 一键全拉满` 快捷条；
+     - **花名册英雄卡片与「英雄精修 / 怪癖疾病」全屏二级页**：可视化生命值与压力双进度条、职业/等级/状态徽章、姓名搜索与状态筛选（需恢复/含疾病/阵亡）；点入深色余烬二级页直接点选 Lv.0–6、武器/护甲 1–5 级、美德/折磨网格与 22 项精选正面怪癖图鉴（支持 Android 13–17 手势返回）；
+     - **饰品仓库与「分类饰品图鉴」二级页**：支持按先祖/极稀有/稀有/收藏家/鸦翼/奖杯/疯狂分类筛选、搜索、已拥有数量标注与 `×1 / ×2 / ×4` 批量收入仓库；
+     - 城镇 8 座建筑一键全解锁、各地牢区域等级预览与一键全区满级；
+     - **全字段原始 DSON 浏览器与节点编辑二级页**：支持文件横向胶囊切换、可点击面包屑导航、字段搜索与 `int32 / float32 / bool / string` 校验写回。
    - **非破坏性游戏规则修改器（`ContentModGenerator` / `content_modifier.py`）**：
-     - 生成独立标准覆盖 Mod `torch_content_modifier`（PC Steam 与安卓通用，随时一键卸载还原）：
-       - 金币/传家宝/宝石/补给叠加上限倍率（1x–99x）与补给品免费；
-       - 英雄饰品装备槽位扩展（2–4 格）与远征背包格扩展（16–24 格）；
-       - 战斗动画倍速（1.0x–3.0x）、暴击倍率、解除 95% 命中上限、100% 无损撤退、美德触发概率、受压倍率、每周回压与极速升级；
-       - 马车招募数与花名册上限扩容；PC 端还支持全英雄基础 HP/伤害/速度/闪避倍率与建筑升级折扣。
+     - 内置 4 套一键预设方案（`还原原版 / 轻度舒适 / 爽快开荒 / 终极无双`）与 4 组主题卡片（背包补给、战斗输出、压力美德、城镇招募），生成独立标准覆盖 Mod `torch_content_modifier`（随时一键卸载还原）。
 
 ---
 
@@ -59,7 +55,7 @@
 ```text
 ├── INDEX.md                 # 工作区总索引与全量源码文件清单
 ├── docs/                    # 系统架构（ARCHITECTURE）、修改器指南（MODIFIER-GUIDE）、构建测试（BUILD-AND-TEST）
-├── switch-runtime/          # 私有仓库内置 Switch 运行时壳（TorchLauncher-v2.0.apk / wicked-runtime-shell.apk）与 Switch 主程序+触屏差异层（switch-diff-layer.zip）
+├── switch-runtime/          # 私有仓库内置 Switch 运行时壳（TorchLauncher-v2.1.apk / wicked-runtime-shell.apk）与 Switch 主程序+触屏差异层（switch-diff-layer.zip）
 ├── app/                     # 余烬一体化启动器 Android 原创源码（含修改器 UI 与引擎层，见 app/README.md）
 ├── game-patch/              # libtorcharchive.so (native/commit.c)、主机端自动化单测与 v1 历史参考
 ├── launcher-build.py        # 薄壳 APK 组装脚本（支持 switch-runtime/wicked-runtime-shell.apk 与完整基础 APK，注入 4 处 Smali Hook 并 16KB 对齐签名）
@@ -94,7 +90,7 @@ python dd-steam-converter\run.py migrate --output "dist\steam-migration.zip"
 
 # ADB 一键安装仓库预置启动器并推送数据包
 python dd-steam-converter\run.py push `
-  --apk "switch-runtime\TorchLauncher-v2.0.apk" `
+  --apk "switch-runtime\TorchLauncher-v2.1.apk" `
   --pak "dist\dd_assets.pak"
 
 # 或启动 PC 桌面图形界面（默认自动填充 switch-runtime\switch-diff-layer.zip）
@@ -107,8 +103,8 @@ python dd-steam-converter\run.py gui
 # 方式 A（免 Gradle / 免 Android SDK / 免 NDK，直接复用仓库内 9 MB 运行时壳）：
 python launcher-build.py `
   "switch-runtime\wicked-runtime-shell.apk" `
-  "dist\TorchLauncher-v2.0.apk" `
-  --shell-apk "TorchLauncher-Shell-v2.0.0.apk" `
+  "dist\TorchLauncher-v2.1.apk" `
+  --shell-apk "TorchLauncher-Shell-v2.1.0.apk" `
   --jdk "D:\DevTools\Java\jdk-21" `
   --build-tools "D:\Android\build-tools\36.0.0" `
   --apktool "D:\DevTools\apktool\apktool.jar" `
@@ -120,7 +116,7 @@ python launcher-build.py `
 gradle --offline :app:assembleDebug :app:lintDebug
 python launcher-build.py `
   "switch-runtime\wicked-runtime-shell.apk" `
-  "dist\TorchLauncher-v2.0.apk" `
+  "dist\TorchLauncher-v2.1.apk" `
   --shell-apk "app\build\outputs\apk\debug\app-debug.apk" `
   --jdk "D:\DevTools\Java\jdk-21" `
   --build-tools "D:\Android\build-tools\36.0.0" `

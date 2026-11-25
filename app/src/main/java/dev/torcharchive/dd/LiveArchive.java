@@ -31,7 +31,9 @@ final class LiveArchive {
     private static final String PREFIX = "auto-";
 
     record History(List<ArchiveStore.Entry> entries, String status) {}
-    record DisplayInfo(int width, int height, boolean fillScreen, boolean avoidCutout, int screenW, int screenH) {}
+    record DisplayInfo(int width, int height, boolean fillScreen, boolean avoidCutout,
+                       int screenW, int screenH, int refreshRate, int effectiveFps,
+                       int maxRefreshRate, int[] supportedRates) {}
     record GameMod(String id, String title, String version, String format, long files, long bytes, boolean prepared) {}
     record SlotMod(String name, String source) {}
     record SlotMods(String slot, String label, long modified, int steamCount, List<SlotMod> mods) {}
@@ -106,8 +108,8 @@ final class LiveArchive {
         return parseDisplay(DisplayConfig.describe(context));
     }
 
-    DisplayInfo setDisplay(int width, int height, boolean fillScreen, boolean avoidCutout) throws IOException {
-        return parseDisplay(DisplayConfig.apply(context, width, height, fillScreen, avoidCutout));
+    DisplayInfo setDisplay(int width, int height, boolean fillScreen, boolean avoidCutout, int refreshRate) throws IOException {
+        return parseDisplay(DisplayConfig.apply(context, width, height, fillScreen, avoidCutout, refreshRate));
     }
 
     List<GameMod> listMods() throws IOException {
@@ -196,13 +198,19 @@ final class LiveArchive {
     }
 
     private static DisplayInfo parseDisplay(Bundle b) {
+        int[] rates = b.getIntArray("supported_rates");
+        if (rates == null || rates.length == 0) rates = new int[]{60};
         return new DisplayInfo(
                 b.getInt("width", 1920),
                 b.getInt("height", 1080),
                 b.getBoolean("fill_screen", false),
                 b.getBoolean("avoid_cutout", true),
                 b.getInt("screen_w", 1920),
-                b.getInt("screen_h", 1080)
+                b.getInt("screen_h", 1080),
+                b.getInt("refresh_rate", 60),
+                b.getInt("effective_fps", 60),
+                b.getInt("max_refresh_rate", 60),
+                rates
         );
     }
 

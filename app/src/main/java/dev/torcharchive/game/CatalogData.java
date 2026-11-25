@@ -247,6 +247,22 @@ public final class CatalogData {
         return id;
     }
 
+    public static String trinketCategory(String id) {
+        for (NamedEntry entry : CURATED_TRINKETS) {
+            if (entry.id.equals(id)) return entry.category;
+        }
+        return "自定义";
+    }
+
+    public static int dungeonLevelForXp(int xp) {
+        int[] thresholds = {0, 4, 12, 24, 42, 66, 96, 132};
+        int lv = 0;
+        for (int i = 0; i < thresholds.length; i++) {
+            if (xp >= thresholds[i]) lv = i;
+        }
+        return lv;
+    }
+
     public static boolean isDisease(String quirkId) {
         for (NamedEntry d : DISEASES) {
             if (d.id.equals(quirkId)) return true;

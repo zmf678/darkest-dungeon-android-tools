@@ -32,7 +32,7 @@ dd-steam-converter/bin/
 
 # Private repository bundled Switch runtime shell & diff layer
 !switch-runtime/
-!switch-runtime/TorchLauncher-v2.0.apk
+!switch-runtime/TorchLauncher-v2.1.apk
 !switch-runtime/wicked-runtime-shell.apk
 !switch-runtime/switch-diff-layer.zip
 !switch-runtime/SHA256SUMS.txt

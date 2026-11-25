@@ -96,6 +96,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         @Override public void onChange(boolean selfChange) { refreshLive(false); }
     };
     private ScrollView scroll;
+    private Object backCallback;
 
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -224,6 +225,36 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         redraw();
     }
 
+    @Override protected void onDestroy() {
+        if (android.os.Build.VERSION.SDK_INT >= 33 && backCallback != null) {
+            try {
+                getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
+                        (android.window.OnBackInvokedCallback) backCallback);
+            } catch (Throwable ignored) {
+            }
+            backCallback = null;
+        }
+        super.onDestroy();
+    }
+
+    private void syncBackCallback() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return;
+        boolean need = (tab == 2 && modifierSection.isInSubPage());
+        if (need && backCallback == null) {
+            android.window.OnBackInvokedCallback cb = () -> {
+                if (tab == 2 && modifierSection.handleBack()) return;
+                syncBackCallback();
+            };
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, cb);
+            backCallback = cb;
+        } else if (!need && backCallback != null) {
+            getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
+                    (android.window.OnBackInvokedCallback) backCallback);
+            backCallback = null;
+        }
+    }
+
     private void reload() {
         updateLists();
         draw();
@@ -271,8 +302,11 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         page.setPadding(pad, dp(wide ? 24 : 14), pad, dp(28));
         int available = getResources().getDisplayMetrics().widthPixels - (wide ? dp(96) : 0);
         centered.addView(page, new FrameLayout.LayoutParams(Math.min(available, dp(1080)), -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL));
-        page.addView(hero(wide), new LinearLayout.LayoutParams(-1, dp(wide ? 210 : 178)));
-        if (busy || !note.isEmpty()) add(page, feedback(), 14);
+        boolean inModifierSub = (tab == 2 && modifierSection.isInSubPage());
+        if (!inModifierSub) {
+            page.addView(hero(wide), new LinearLayout.LayoutParams(-1, dp(wide ? 210 : 178)));
+        }
+        if (busy || !note.isEmpty()) add(page, feedback(), inModifierSub ? 0 : 14);
 
         switch (tab) {
             case 0 -> add(page, homePage(wide), 18);
@@ -291,7 +325,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
                     add(page, restoreGuide(), 18);
                 }
             }
-            case 2 -> add(page, modifierSection.buildView(wide, display), 18);
+            case 2 -> add(page, modifierSection.buildView(wide, display), inModifierSub ? (busy || !note.isEmpty() ? 10 : 0) : 18);
             case 3 -> {
                 add(page, actions(), 14);
                 if (wide) {
@@ -318,6 +352,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
             ScrollView current = scroll;
             current.post(() -> current.scrollTo(0, scrollY));
         }
+        syncBackCallback();
     }
 
     private View toolbar() {
@@ -376,15 +411,15 @@ public final class MainActivity extends Activity implements ModifierSection.Host
             case 1 -> "存档书库";
             case 2 -> "完整修改器";
             case 3 -> "模组工坊";
-            case 4 -> "全机型画面";
+            case 4 -> "全机型分辨率与高刷";
             default -> "使用指南";
         };
         String detail = switch (tab) {
             case 0 -> "一体化薄壳启动器 · 外置数据包直读与 Steam 迁移";
             case 1 -> "同 UID 直连免拦截 · 自动留档与一键回档";
-            case 2 -> "全字段二进制存档编辑 & 非破坏性游戏规则修改";
+            case 2 -> "全字段二进制存档精修 · 二级详情页与规则 Mod 工坊";
             case 3 -> "直装 Mod ZIP · 档位加载顺序与预设方案";
-            case 4 -> "动态探测任意手机平板折叠屏 · 等比清晰或全屏铺满";
+            case 4 -> "动态探测任意设备分辨率 · 支持 60 / 90 / 120 Hz 高刷适配";
             default -> "Steam 转安卓步骤 · 数据包路径与高级工具";
         };
         TextView heading = type(title, wide ? 36 : 30, INK, display);
@@ -475,7 +510,8 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         if (displayInfo != null) {
             add(overview, type("画面：" + displayInfo.width() + " × " + displayInfo.height()
                     + (displayInfo.fillScreen() ? "（全屏铺满）" : "（等比清晰）")
-                    + "  ·  设备屏幕 " + displayInfo.screenW() + "×" + displayInfo.screenH(), 13, GOLD, Typeface.DEFAULT), 4);
+                    + "  ·  " + refreshLabel(displayInfo.refreshRate(), displayInfo.effectiveFps())
+                    + "  ·  屏幕 " + displayInfo.screenW() + "×" + displayInfo.screenH(), 13, GOLD, Typeface.DEFAULT), 4);
         }
         add(overview, type("数据包标准目录：Android/media/" + getPackageName() + "/dd_assets.pak（可用 ADB 或文件管理器直拷）",
                 12, MUTED, Typeface.DEFAULT), 6);
@@ -647,22 +683,80 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         String screenRatio = DisplayConfig.aspectTag(info.screenW(), info.screenH());
         String curRatio = DisplayConfig.aspectTag(info.width(), info.height());
         String modeLabel = info.fillScreen() ? "全屏铺满（去黑边）" : "等比清晰（原比例）";
+        String supportedStr = formatSupportedRates(info.supportedRates());
 
+        // Top hardware + active state card
         LinearLayout summary = vertical();
         summary.setPadding(dp(18), dp(16), dp(18), dp(16));
         summary.setBackground(surface(PANEL, LINE, 13));
-        summary.addView(type("全机型动态画面适配", 17, INK, Typeface.DEFAULT_BOLD));
-        add(summary, type("本机物理屏幕：" + info.screenW() + " × " + info.screenH() + "（" + screenRatio + "）", 14, MUTED, Typeface.DEFAULT), 6);
-        add(summary, type("当前游戏输出：" + info.width() + " × " + info.height() + "（" + curRatio + "） · " + modeLabel, 14, GOLD, Typeface.DEFAULT_BOLD), 4);
-        add(summary, type("修改后点「保存并重启游戏」即可立即拉起新分辨率的 :nx 进程。", 13, MUTED, Typeface.DEFAULT), 6);
+        summary.addView(type("全机型分辨率与高刷适配", 17, INK, Typeface.DEFAULT_BOLD));
+        add(summary, type("物理屏幕：" + info.screenW() + " × " + info.screenH() + "（" + screenRatio + "）  ·  面板支持：" + supportedStr,
+                13, MUTED, Typeface.DEFAULT), 6);
+        add(summary, type("当前输出：" + info.width() + " × " + info.height() + "（" + curRatio + "）  ·  "
+                + refreshLabel(info.refreshRate(), info.effectiveFps()) + "  ·  " + modeLabel,
+                14, GOLD, Typeface.DEFAULT_BOLD), 5);
+        add(summary, type("修改分辨率或刷新率后，点击底部「保存并重启游戏」即可立即拉起新配置的 :nx 进程。",
+                12, MUTED, Typeface.DEFAULT), 6);
         block.addView(summary);
 
-        // Scaling mode toggle
+        // High Refresh Rate Card (60 / 90 / 120 Hz / Auto Max)
+        LinearLayout fpsCard = vertical();
+        fpsCard.setPadding(dp(16), dp(14), dp(16), dp(14));
+        fpsCard.setBackground(surface(PANEL, LINE, 13));
+        LinearLayout fpsHead = horizontal();
+        fpsHead.setGravity(Gravity.CENTER_VERTICAL);
+        fpsHead.addView(type("高刷帧率适配（60 / 90 / 120 Hz）", 16, INK, Typeface.DEFAULT_BOLD),
+                new LinearLayout.LayoutParams(0, -2, 1));
+        TextView maxBadge = type("本机最高 " + info.maxRefreshRate() + " Hz", 11, GREEN, Typeface.DEFAULT_BOLD);
+        maxBadge.setPadding(dp(8), dp(3), dp(8), dp(3));
+        maxBadge.setBackground(surface(0xff262f23, LINE, 6));
+        fpsHead.addView(maxBadge);
+        fpsCard.addView(fpsHead);
+
+        add(fpsCard, type("同步接管窗口 Display.Mode、Surface.setFrameRate 与 libddnx.so 原生控帧上限，解除原包 60 Hz 锁帧。",
+                12, MUTED, Typeface.DEFAULT), 5);
+
+        int[] fpsValues = {60, 90, 120, 0};
+        String[] fpsTitles = {"60 Hz", "90 Hz", "120 Hz", "自动最高"};
+        String[] fpsSubs = {
+                "原版稳帧 · 低功耗",
+                "高刷流畅 · 均衡",
+                "极致丝滑 · 旗舰",
+                "匹配本机 " + info.maxRefreshRate() + " Hz"
+        };
+        LinearLayout fpsGrid = horizontal();
+        for (int i = 0; i < fpsValues.length; i++) {
+            final int target = fpsValues[i];
+            boolean active = info.refreshRate() == target;
+            boolean supported = (target == 0) || (target <= info.maxRefreshRate() + 2);
+            LinearLayout tile = vertical();
+            tile.setGravity(Gravity.CENTER);
+            tile.setPadding(dp(6), dp(10), dp(6), dp(10));
+            tile.setBackground(pressable(active ? RED : RAISED, active ? GOLD : LINE, 10));
+            tile.setOnClickListener(v -> applyDisplay(info.width(), info.height(), info.fillScreen(), info.avoidCutout(), target));
+            tile.addView(type(fpsTitles[i], 14, active ? INK : (supported ? GOLD : MUTED), Typeface.DEFAULT_BOLD));
+            TextView sub = type(fpsSubs[i], 10, active ? INK : MUTED, Typeface.DEFAULT);
+            sub.setGravity(Gravity.CENTER);
+            add(tile, sub, 3);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
+            if (i + 1 < fpsValues.length) lp.setMarginEnd(dp(6));
+            fpsGrid.addView(tile, lp);
+        }
+        add(fpsCard, fpsGrid, 10);
+
+        if (info.refreshRate() > info.maxRefreshRate() + 2) {
+            add(fpsCard, type("提示：所选 " + info.refreshRate() + " Hz 高于当前探测到的屏幕上限（"
+                    + info.maxRefreshRate() + " Hz），系统将自动回落至最接近的可用刷新率；若系统锁帧请在手机「显示与亮度」中开启高刷新率。",
+                    12, GOLD, Typeface.DEFAULT), 8);
+        }
+        add(block, fpsCard, 12);
+
+        // Scaling mode & cutout toggle
         LinearLayout modeRow = horizontal();
         weighted(modeRow, button(info.fillScreen() ? "等比清晰（原比例）" : "✓ 等比清晰（原比例）", !info.fillScreen(),
-                () -> applyDisplay(info.width(), info.height(), false, info.avoidCutout())), true);
+                () -> applyDisplay(info.width(), info.height(), false, info.avoidCutout(), info.refreshRate())), true);
         weighted(modeRow, button(info.fillScreen() ? "✓ 全屏铺满（去黑边）" : "全屏铺满（去黑边）", info.fillScreen(),
-                () -> applyDisplay(info.width(), info.height(), true, info.avoidCutout())), false);
+                () -> applyDisplay(info.width(), info.height(), true, info.avoidCutout(), info.refreshRate())), false);
         add(block, modeRow, 12);
 
         CheckBox cutout = new CheckBox(this);
@@ -670,7 +764,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         cutout.setTextColor(INK);
         cutout.setChecked(info.avoidCutout());
         cutout.setOnCheckedChangeListener((b, checked) ->
-                applyDisplay(info.width(), info.height(), info.fillScreen(), checked));
+                applyDisplay(info.width(), info.height(), info.fillScreen(), checked, info.refreshRate()));
         add(block, cutout, 8);
 
         LinearLayout resBlock = vertical();
@@ -683,7 +777,7 @@ public final class MainActivity extends Activity implements ModifierSection.Host
             boolean selected = p.width == info.width() && p.height == info.height();
             list.addView(record("screen", p.width + " × " + p.height + " · " + p.title, p.badge,
                     selected ? "当前" : "切换",
-                    () -> applyDisplay(p.width, p.height, info.fillScreen(), info.avoidCutout())));
+                    () -> applyDisplay(p.width, p.height, info.fillScreen(), info.avoidCutout(), info.refreshRate())));
             if (i < presetsList.size() - 1) list.addView(rule());
         }
         add(resBlock, list, 10);
@@ -694,12 +788,28 @@ public final class MainActivity extends Activity implements ModifierSection.Host
         return block;
     }
 
-    private void applyDisplay(int width, int height, boolean fillScreen, boolean avoidCutout) {
-        perform("正在写入画面配置…", () -> live.setDisplay(width, height, fillScreen, avoidCutout), updated -> {
+    private static String refreshLabel(int pref, int effective) {
+        if (pref == 0) return "自动高刷 (" + effective + " Hz)";
+        return pref + " Hz" + (pref >= 90 ? " 高刷" : "");
+    }
+
+    private static String formatSupportedRates(int[] rates) {
+        if (rates == null || rates.length == 0) return "60 Hz";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < rates.length; i++) {
+            if (i > 0) sb.append(" / ");
+            sb.append(rates[i]);
+        }
+        return sb.append(" Hz").toString();
+    }
+
+    private void applyDisplay(int width, int height, boolean fillScreen, boolean avoidCutout, int refreshRate) {
+        perform("正在写入画面与刷新率配置…", () -> live.setDisplay(width, height, fillScreen, avoidCutout, refreshRate), updated -> {
             displayInfo = updated;
             noteRestore = true;
             message("已设为 " + updated.width() + "×" + updated.height()
-                    + (updated.fillScreen() ? "（全屏铺满）" : "（等比清晰）") + "。点击「打开/重启游戏」立即生效。");
+                    + " · " + refreshLabel(updated.refreshRate(), updated.effectiveFps())
+                    + (updated.fillScreen() ? "（全屏铺满）" : "（等比清晰）") + "。点击「保存并重启游戏」立即生效。");
         });
     }
 
@@ -1357,6 +1467,11 @@ public final class MainActivity extends Activity implements ModifierSection.Host
 
     @Override public void requestRedraw() {
         redraw();
+    }
+
+    @Override public void scrollToTop() {
+        scrollY = 0;
+        if (scroll != null) scroll.scrollTo(0, 0);
     }
 
     @Override public void launchOrRestartGame() {

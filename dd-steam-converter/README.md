@@ -45,10 +45,10 @@ python run.py verify "..\dist\dd_assets.pak"
 python run.py migrate --output "..\dist\steam-migration.zip"
 
 # 5. ADB 一键推送到设备（直接使用私有仓库预置薄壳启动器）
-python run.py push --apk "..\switch-runtime\TorchLauncher-v2.0.apk" --pak "..\dist\dd_assets.pak"
+python run.py push --apk "..\switch-runtime\TorchLauncher-v2.1.apk" --pak "..\dist\dd_assets.pak"
 
 # 6. A1 兼容模式：把薄壳启动器与 dd_assets.pak 合并为单个独立完整 APK
-python run.py build-apk --shell-apk "..\switch-runtime\TorchLauncher-v2.0.apk" --pak "..\dist\dd_assets.pak" --output "..\dist\TorchLauncher-Full-A1.apk" ...
+python run.py build-apk --shell-apk "..\switch-runtime\TorchLauncher-v2.1.apk" --pak "..\dist\dd_assets.pak" --output "..\dist\TorchLauncher-Full-A1.apk" ...
 
 # 7. PC 端完整存档修改器（写前自动备份到 .torch-backups/）
 python run.py edit-save "D:\Steam\userdata\...\profile_0" info

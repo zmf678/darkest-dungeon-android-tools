@@ -101,6 +101,36 @@ def patch_wicked_smali(project: Path):
         ".end method"
     )
     text = text[:res_begin] + res_stub + text[res_end:]
+
+    # Hook 5: NxActivity.panelAt60() -> DisplayConfig.applyRefreshRate(Activity)
+    fps_begin = text.index(".method private panelAt60()V")
+    fps_end = text.index(".end method", fps_begin) + len(".end method")
+    fps_stub = (
+        ".method private panelAt60()V\n"
+        "    .locals 0\n\n"
+        "    invoke-static {p0}, Ldev/torcharchive/game/DisplayConfig;->applyRefreshRate(Landroid/app/Activity;)V\n\n"
+        "    return-void\n"
+        ".end method"
+    )
+    text = text[:fps_begin] + fps_stub + text[fps_end:]
+
+    # Hook 6: NxActivity.surfaceChanged() -> DisplayConfig.applySurfaceFrameRate(Context, Surface)
+    sc_begin = text.index(".method public surfaceChanged(Landroid/view/SurfaceHolder;III)V")
+    sc_end = text.index(".end method", sc_begin) + len(".end method")
+    sc_body = text[sc_begin:sc_end]
+    m_surf = re.search(
+        r"(invoke-static \{(\w+)\}, Lru/darkest/port/NxActivity;->nxSurface\(Landroid/view/Surface;\)V)",
+        sc_body,
+    )
+    if not m_surf:
+        raise ValueError("Could not locate nxSurface call inside NxActivity.surfaceChanged")
+    surf_reg = m_surf.group(2)
+    sc_patched = (
+        sc_body[: m_surf.start()]
+        + f"invoke-static {{p0, {surf_reg}}}, Ldev/torcharchive/game/DisplayConfig;->applySurfaceFrameRate(Landroid/content/Context;Landroid/view/Surface;)V\n\n    "
+        + sc_body[m_surf.start() :]
+    )
+    text = text[:sc_begin] + sc_patched + text[sc_end:]
     activity.write_text(text, encoding="utf-8")
 
     # Hook 4: NxActivity$LayerView.onMeasure(II)V -> DisplayConfig.measure(...)

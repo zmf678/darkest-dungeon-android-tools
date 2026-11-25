@@ -48,21 +48,25 @@ dev.torcharchive.ddgame（同一 Linux UID，共享私有目录与 Android/media
 
 ---
 
-## 3. 薄壳 APK 组装与 4 处最小 Smali Hook
+## 3. 薄壳 APK 组装与 6 处最小 Smali Hook
 
 私有仓库已在 `switch-runtime/` 内置两份运行时壳文件，免去每次处理 3.8 GB 完整基础 APK：
-- **[switch-runtime/TorchLauncher-v2.0.apk](../switch-runtime/TorchLauncher-v2.0.apk)**（14.87 MB）：已组装、16 KB 对齐并签名的薄壳启动器成品，可直接安装；
+- **[switch-runtime/TorchLauncher-v2.1.apk](../switch-runtime/TorchLauncher-v2.1.apk)**（14.90 MB，`versionCode=40`）：已组装、16 KB 对齐并签名的薄壳启动器成品，可直接安装并兼容从 v1/v2.0 原地升级；
 - **[switch-runtime/wicked-runtime-shell.apk](../switch-runtime/wicked-runtime-shell.apk)**（9.01 MB，`SHA-256: 130ae6b9...09be86f2`）：仅包含 Wicked 2.2.2 代码与原生库的精简运行壳，供 [launcher-build.py](../launcher-build.py) 重编组装使用（脚本同时兼容原始完整 Wicked 2.2.2 APK `0b84730f...a619410`）。
 
 组装流程如下：
 
-1. **反编译与最小化 Smali 注入（`patch_wicked_smali()`）**：仅抽取并修改 Wicked 的 `NxActivity.smali` 与 `NxActivity$LayerView.smali`，共注入 4 处 Hook：
-   - **Hook 1**：在 `System.loadLibrary("ddnx")` 之后调用 `GameArchive.install(Context)`；
+1. **反编译与最小化 Smali 注入（`patch_wicked_smali()`）**：仅抽取并修改 Wicked 的 `NxActivity.smali` 与 `NxActivity$LayerView.smali`，共注入 6 处 Hook：
+   - **Hook 1**：在 `System.loadLibrary("ddnx")` 之后调用 `GameArchive.install(Context)`（同时应用自动留档 Hook 与原生目标帧率补丁）；
    - **Hook 2**：将传给 `NxActivity.nxApk()` 的 `applicationInfo.sourceDir` 替换为 `PakMount.resolvePakPath(Context)`；
    - **Hook 3**：覆写 `NxActivity.resolution()`，委派给 `DisplayConfig.resolveResolution(Context)`；
-   - **Hook 4**：覆写 `NxActivity$LayerView.onMeasure(II)`，委派给 `DisplayConfig.measure(Context, ...)`。
+   - **Hook 4**：覆写 `NxActivity$LayerView.onMeasure(II)`，委派给 `DisplayConfig.measure(Context, ...)`；
+   - **Hook 5**：覆写 `NxActivity.panelAt60()`，委派给 `DisplayConfig.applyRefreshRate(Activity)`，按用户所选 60/90/120 Hz/自动最高匹配物理 `Display.Mode` 与挖孔模式；
+   - **Hook 6**：在 `NxActivity.surfaceChanged()` 调用 `nxSurface()` 前插入 `DisplayConfig.applySurfaceFrameRate(Context, Surface)`，在 Android 11+ 通知 SurfaceFlinger / LTPO 面板切入目标高刷。
 2. **原生库编译与保留**：
-   - 使用 NDK Clang 编译 [game-patch/native/commit.c](../game-patch/native/commit.c) 生成 16 KB 页对齐的 `libtorcharchive.so`（通过 GOT Hook 拦截 `libddnx.so` 偏移 `0xab338` 对 `nftw@0x127590` 的存档收尾遍历调用，完成后回调 `GameArchive.afterCommit()`）；
+   - 使用 NDK Clang 编译 [game-patch/native/commit.c](../game-patch/native/commit.c) 生成 16 KB 页对齐的 `libtorcharchive.so`：
+     - `installCommitCallback()`：通过 GOT Hook 拦截 `libddnx.so` 偏移 `0xab338` 对 `nftw@0x127590` 的存档收尾遍历调用，完成后回调 `GameArchive.afterCommit()`；
+     - `setNativeTargetFps(int)`：校验 `libddnx.so` 偏移 `0xb13ac` 处的 `movz w8, #0x4270, lsl #16`（`60.0f`），在渲染线程启动前按 W^X 安全页权限替换为目标刷新率浮点指令（`90.0f=0x42b4`、`120.0f=0x42f0`、最高 `165.0f=0x4325`），解除 `ANativeWindow_setFrameRate` 与 `eglPresentationTimeANDROID` 的 60 Hz 锁帧。
    - 从本地基础 APK 抽取 `arm64-v8a` 下的 `libc++_shared.so`、`libddnx.so`、`libddport.so`、`libddastc.so`，统一以 `ZIP_STORED` 写入 `lib/arm64-v8a/`。
 3. **MultiDex 安全拼接**：Gradle Debug 输出通常包含多个 DEX（例如 `classes.dex`–`classes5.dex`）。[launcher-build.py](../launcher-build.py) 会保留启动器壳的全部 `classes*.dex`，再将改写后的 Wicked `classes.dex` 放入下一个顺位（如 `classes6.dex`），彻底避免覆写壳类导致的 `ClassNotFoundException`。
 4. **辅助资产保留与对齐签名**：保留 5 个启动器内嵌规则生成或字体所需的辅助小资产（`pc_fonts.zip`、`ui_merge_base.zip`、`base_png.txt`、`layout_keys.txt`、`mod_icon.png`），最终通过 `zipalign -P 16 -f 4` 执行 16 KB 对齐并调用 `apksigner` 完成签名校验。
