@@ -1,45 +1,13 @@
-# game-patch（原生留档 Hook、Java 主机单测集与 v1 历史参考）
+# game-patch（Java 主机测试集与 v1 历史参考）
 
-> 返回导航：[工作区总索引](../INDEX.md) · [项目总览](../README.md) · [系统架构](../docs/ARCHITECTURE.md) · [构建测试指南](../docs/BUILD-AND-TEST.md)
+> 返回导航：[工作区总索引](../INDEX.md) · [项目总览](../README.md) · [English README](../README.en.md) · [系统架构](../docs/ARCHITECTURE.md) · [构建测试指南](../docs/BUILD-AND-TEST.md)
 
-> **v2.0 架构说明**：从 **v2.0** 起，主线已升级为 [app/](../app/README.md) + [launcher-build.py](../launcher-build.py) 的**一体化单 APK 薄壳启动器**（游戏子进程 `:nx` 与启动器主进程同 UID 直连，不再需要双 APK 或跨应用 `ArchiveProvider`）。在 v2.0 中，本目录主要承担两项职责：
-> 1. **[native/commit.c](native/commit.c)**：由 [launcher-build.py](../launcher-build.py) 使用 NDK 编译为 `libtorcharchive.so`，用于 Hook 游戏存档提交后的 `nftw` 调用；
-> 2. **[test/dev/torcharchive/game/](test/dev/torcharchive/game/UnifiedEngineCheck.java)**：主机端 Java 自动化校验集（[DsonCodecCheck.java](test/dev/torcharchive/game/DsonCodecCheck.java)、[SnapshotStoreCheck.java](test/dev/torcharchive/game/SnapshotStoreCheck.java)、[UnifiedEngineCheck.java](test/dev/torcharchive/game/UnifiedEngineCheck.java)）。
->
-> 下文保留原 v1 双包实验架构（`dev.torcharchive.ddgame` + `dev.torcharchive.dd.lab`）的说明作为历史参考。
+> **免责声明**：本目录仅供个人学习与自动化回归测试参考，使用本项目必须搭配已合法购买的正版 Steam《暗黑地牢》目录。
 
----
+从 **v2.0** 起，主线已升级为 [app/](../app/README.md) 的一体化单 APK 启动器架构。本目录当前主要保留两类内容：
 
-# 《暗黑地牢》自动存档、平板分辨率与模组直连实验版（v1 历史参考）
-
-实验版以本机 Wicked Android 2.2.2 APK 为输入，通过独立包名（`dev.torcharchive.ddgame`）安装，并配合同签名「余烬档案馆」实验版（`dev.torcharchive.dd.lab`）提供三项扩展能力：
-
-1. **保存即自动留档**：游戏完成存档提交及临时文件收尾后，补丁同步捕获发生变化的完整档位，使用原始文件字节生成 ZIP，通过签名保护的本机 `ContentProvider` 供档案馆查看和回档。
-2. **平板分辨率与全屏适配（`2.2.2-archive.2+`）**：
-   - 接管 `NxActivity.resolution()` 与 `NxActivity$LayerView.onMeasure()`，放宽 16:9 强校验，扩展游戏内选项 `options.value_definitions.json` 至 6 档（`1280×720`、`1920×1080`、`2560×1440`、`3008×1692`、`2560×1600`、`3008×1880`），同时严格保持 `ZIP_STORED` 与原 `filelist.csv` 字节长度一致。
-   - 支持「等比清晰（原比例）」与「全屏铺满（去黑边）」两种缩放模式，可在档案馆「画面」页一键切换，重启游戏生效。
-3. **本地模组直连管理（`2.2.2-archive.2+`）**：
-   - 扩展 `ArchiveProvider` 支持直接列出、流式解压安装、删除 `Android/media/dev.torcharchive.ddgame/mods/` 下的 Mod。
-   - 内置无损 Red Hook 二进制 DSON 编解码器（`DsonCodec.java`），支持读取并修改各档位 `persist.game.json` 的 `applied_ugcs_1_0`（启用状态、加载顺序与 Steam→本地 `mod` 映射转换），写入前强制触发 `SnapshotStore.backup()` 留档保护。
-
-## 安装与迁移
-
-1. 安装游戏实验版 `dev.torcharchive.ddgame`，再安装同一证书签名的余烬档案馆实验版 `dev.torcharchive.dd.lab`。两个实验包可以与已有游戏及档案馆并行安装。
-2. 如需迁移原版或 PC Steam 存档：在游戏内选择 **存档与模组 → 存档 → 导入** 选择 `profile_N` 目录并指定目标档位。若导入的是 PC Steam 存档，可直接在档案馆「模组 → 档位模组配置」中保存，一键完成 `source: Steam → mod` 本地映射。
-3. 回档、修改档位 Mod 或切换分辨率后，完全退出实验版游戏并重新打开即可生效。
-
-实验版模组目录为 `Android/media/dev.torcharchive.ddgame/mods`。
-
-## 本地复现
-
-在 Windows 上进入 `game-patch` 目录并运行 `python build.py --help` 查看参数。脚本核对源 APK 的 SHA-256，使用 JDK 21、Android SDK 36、Build Tools 36、NDK r28 和 Apktool 3.0.3 构建，输出改用独立包名、已对齐和已签名的本地实验 APK（`2.2.2-archive.2`）。APK 内的游戏资源和现有原生库来自用户提供的输入。暂存空间约需 12 GB。签名参数可通过环境变量或文件提供。
-
-在档案馆项目根目录运行 `gradle -ParchiveLab=true :app:assembleDebug :app:lintDebug` 构建并行安装版。两份实验 APK 须使用相同证书。已有档案馆若要原地更新，需要用原分发证书对默认包名构建签名。
-
-## 验证
-
-- 主机测试覆盖：
-  - `test/dev/torcharchive/game/SnapshotStoreCheck.java`：三次紧邻提交、重复捕获抑制、重新打开历史、多文件逐字节恢复、回档前版本保留、拒绝已损坏版本、还原被中断替换。
-  - `test/dev/torcharchive/game/DsonCodecCheck.java`：真实二进制 `persist.game.json` 字节级无损往返一致、Steam→本地映射转换、排序修改与清空重读校验。
-- 构建校验：APK 16 KB ZIP 对齐与 `apksigner verify` 校验；档案馆 Gradle 构建与 Android Lint 校验。
-- 真机环境说明：部分系统（如 HyperOS）在完全划掉游戏后台后会拦截跨应用唤醒 `ArchiveProvider`；重新打开一次实验版游戏再切回档案馆即可正常同步。
+1. **Java 主机端自动化验证集（`test/dev/torcharchive/game/`）**：
+   - [DsonCodecCheck.java](test/dev/torcharchive/game/DsonCodecCheck.java)：校验真实二进制 `persist.game.json` 的字节级无损往返、Steam→本地 Mod 映射与重排逻辑；
+   - [SnapshotStoreCheck.java](test/dev/torcharchive/game/SnapshotStoreCheck.java)：校验连续提交自动留档、防抖去重、多文件逐字节恢复、损坏快照拒绝与中断恢复；
+   - [UnifiedEngineCheck.java](test/dev/torcharchive/game/UnifiedEngineCheck.java)：校验 `DisplayConfig` 多分辨率预设、`SaveEditor` 全维度编辑及 `ContentModGenerator` 规则 Mod 生成。
+2. **v1 双包架构历史参考源码（`src/dev/torcharchive/game/`）**：保留早期跨应用 `ContentProvider` 方案的参考实现，供架构演进对照。
