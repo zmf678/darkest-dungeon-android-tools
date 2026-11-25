@@ -2,7 +2,7 @@
 
 > **私有仓库内置运行层说明**：本仓库现为**私有仓库**，已在 [switch-runtime/](switch-runtime/) 目录直接内置精简后的 **Switch 运行时壳**（预组装可直装的 `TorchLauncher-v2.1.apk` 与供源码重编译用的 `wicked-runtime-shell.apk`）及 **Switch 游戏主程序与触屏差异层**（`switch-diff-layer.zip`，含 `exefs/main`、`overlay/` 触屏界面层、23 份 `filelist.csv`、`dlc_info.csv` 与 Switch 专属兼容件）。日常使用与构建均**不再需要额外寻找 3.8 GB 原版基础 APK**，只需本机正版 Steam《暗黑地牢》目录即可完成转换与部署；请勿将本仓库重新设为公开。
 
-> **文档与索引导航**：[工作区总索引 (INDEX.md)](INDEX.md) · [系统架构与纹理规范](docs/ARCHITECTURE.md) · [完整修改器指南](docs/MODIFIER-GUIDE.md) · [构建测试与排障](docs/BUILD-AND-TEST.md) · [Android 启动器模块](app/README.md) · [PC 转换器](dd-steam-converter/README.md) · [原生 Hook 与单测](game-patch/README.md)
+> **文档与索引导航**：[工作区总索引 (INDEX.md)](INDEX.md) · [PC Steam 独立存档与修改器 (dd-steam-toolkit)](dd-steam-toolkit/README.md) · [系统架构与纹理规范](docs/ARCHITECTURE.md) · [完整修改器指南](docs/MODIFIER-GUIDE.md) · [构建测试与排障](docs/BUILD-AND-TEST.md) · [Android 启动器模块](app/README.md) · [PC 转换器](dd-steam-converter/README.md) · [原生 Hook 与单测](game-patch/README.md)
 
 ---
 
@@ -48,6 +48,11 @@
    - **非破坏性游戏规则修改器（`ContentModGenerator` / `content_modifier.py`）**：
      - 内置 4 套一键预设方案（`还原原版 / 轻度舒适 / 爽快开荒 / 终极无双`）与 4 组主题卡片（背包补给、战斗输出、压力美德、城镇招募），生成独立标准覆盖 Mod `torch_content_modifier`（随时一键卸载还原）。
 
+4. **独立 PC Steam 版存档管家 & 完整修改器（`dd-steam-toolkit/`，零第三方依赖）**
+   - 将 APK 中的「存档档案柜 + 全维度修改器 + 非破坏性规则 Mod」完整拆出并深度适配 **PC 正版 Steam《暗黑地牢》**，仅需 Python 3.10+ 标准库即可双击 `启动余烬PC工坊.bat` 以独立桌面窗口运行（详见 [dd-steam-toolkit/README.md](dd-steam-toolkit/README.md)）。
+   - **实时自动留档 + 原子回档**：后台线程实时监听 Steam `remote/profile_0..8` 变动并生成 SHA-256 去重校验快照，支持版本变更对比、一键原子回档、备注管理以及 Steam 与安卓余烬存档 ZIP 互导。
+   - **Steam 深度适配**：写档前自动检测 `Darkest.exe` 进程状态；自动扫描本体与已购 DLC 的全部饰品/怪癖/英雄文件；安装规则 Mod `torch_content_modifier` 或调整 Mod 排序时严格保留原有创意工坊 Mod 的 `source: Steam`。
+
 ---
 
 ## 目录结构
@@ -59,7 +64,8 @@
 ├── app/                     # 余烬一体化启动器 Android 原创源码（含修改器 UI 与引擎层，见 app/README.md）
 ├── game-patch/              # libtorcharchive.so (native/commit.c)、主机端自动化单测与 v1 历史参考
 ├── launcher-build.py        # 薄壳 APK 组装脚本（支持 switch-runtime/wicked-runtime-shell.apk 与完整基础 APK，注入 4 处 Smali Hook 并 16KB 对齐签名）
-├── dd-steam-converter/      # PC 端 Steam 资源转换器、DSON 迁移、ADB 推送与完整桌面修改器
+├── dd-steam-converter/      # PC 端 Steam 资源转换器、DSON 迁移、ADB 推送与配套修改器
+├── dd-steam-toolkit/        # 独立 PC Steam 版《暗黑地牢》余烬存档管家 & 完整修改器（零第三方依赖，桌面窗口 + CLI）
 ├── DESIGN.md                # 视觉与交互设计规范
 ├── PRODUCT.md               # 初始产品定位简述
 └── README.md
@@ -127,9 +133,20 @@ python launcher-build.py `
   --key-password pass:android
 ```
 
-### 3. 自动化测试
+### 3. 独立 PC Steam 版存档管家 & 完整修改器（纯 PC 玩家开箱即用）
 
 ```powershell
-# Python 单元测试（DSON 往返、ASTC 4x4 DDS 编码、迁移、存档修改器、内容修改器）
+# 零第三方依赖，直接启动余烬 PC 桌面窗口（或双击 dd-steam-toolkit\启动余烬PC工坊.bat）
+python dd-steam-toolkit\run.py
+
+# 或仅启动后台实时自动留档守护
+python dd-steam-toolkit\run.py watch
+```
+
+### 4. 自动化测试
+
+```powershell
+# Python 单元测试（Steam 转换器 + PC 独立存档管家与修改器）
 python -m unittest discover -s dd-steam-converter\tests -v
+python -m unittest discover -s dd-steam-toolkit\tests -v
 ```

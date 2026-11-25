@@ -27,6 +27,8 @@ __pycache__/
 dd-steam-converter/dist/
 dd-steam-converter/build/
 dd-steam-converter/bin/
+dd-steam-toolkit/dist/
+dd-steam-toolkit/build/
 .env
 .env.*
 

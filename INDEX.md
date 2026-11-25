@@ -20,6 +20,7 @@
 | [docs/M0-MUMU-POC-GUIDE.md](docs/M0-MUMU-POC-GUIDE.md) | *（归档备忘）* 路线 C 阶段 M0 MuMu Android 15 模拟器复现手册、避坑实录与交接清单 | 历史复现归档 |
 | [app/README.md](app/README.md) | Android 一体化启动器 `dev.torcharchive.ddgame` 包结构、UI 页签与引擎类说明 | Android 客户端开发者 |
 | [dd-steam-converter/README.md](dd-steam-converter/README.md) | PC 端 Steam 资源转换、存档迁移、ADB 推送、CLI/GUI 修改器说明 | PC 工具链开发者与桌面用户 |
+| [dd-steam-toolkit/README.md](dd-steam-toolkit/README.md) | 独立 PC Steam 版《暗黑地牢》余烬存档管家（实时自动留档/原子回档）与完整修改器说明 | PC Steam 玩家与桌面开发者 |
 | [game-patch/README.md](game-patch/README.md) | 原生 Hook（`commit.c`）、Java 主机测试集与 v1 双包方案历史参考 | 原生 Hook / 单测维护者 |
 | [DESIGN.md](DESIGN.md) | 余烬档案馆色彩、字体与原创头图提示词设计规范 | UI / 视觉设计人员 |
 | [PRODUCT.md](PRODUCT.md) | 初始产品定位简述 | 产品规划参考 |
@@ -105,6 +106,28 @@
 | [dd_converter/gui.py](dd-steam-converter/dd_converter/gui.py) | 余烬视觉风格的 PC 桌面图形界面（集成转换、迁移、完整存档修改器与规则修改器） |
 | [tests/test_converter.py](dd-steam-converter/tests/test_converter.py) | Python 自动化单元测试与真实固件回归测试（DSON 往返、ASTC 4×4 块级精确验证、迁移、双修改器） |
 
+### 4.5 独立 PC Steam 版存档管家 & 完整修改器（`dd-steam-toolkit/`）
+
+详细使用与命令说明见 [dd-steam-toolkit/README.md](dd-steam-toolkit/README.md)。
+
+| 文件 | 用途说明 |
+| :--- | :--- |
+| [run.py](dd-steam-toolkit/run.py) | PC Steam 独立版统一入口（默认启动余烬桌面窗口，支持全套 CLI 子命令） |
+| [启动余烬PC工坊.bat](dd-steam-toolkit/启动余烬PC工坊.bat) | Windows 双击一键启动脚本（零第三方 Python 依赖） |
+| [build_exe.py](dd-steam-toolkit/build_exe.py) | 可选 PyInstaller 单文件 `TorchArchivePC.exe` 打包脚本 |
+| [torch_pc/dson.py](dd-steam-toolkit/torch_pc/dson.py) | 无损二进制 DSON 编解码器与 `applied_ugcs_1_0` 保留来源读写 |
+| [torch_pc/steam_env.py](dd-steam-toolkit/torch_pc/steam_env.py) | 多 Steam 账号/DLC/创意工坊/本地 Mod 探测、`Darkest.exe` 进程安全检查与一键启动 |
+| [torch_pc/snapshot_store.py](dd-steam-toolkit/torch_pc/snapshot_store.py) | SHA-256 去重校验快照仓、原子事务回档、中断恢复、变更对比与跨平台 ZIP 导入导出 |
+| [torch_pc/save_watcher.py](dd-steam-toolkit/torch_pc/save_watcher.py) | 后台实时存档变更监控线程（对标安卓 `libtorcharchive.so` 自动留档） |
+| [torch_pc/catalog.py](dd-steam-toolkit/torch_pc/catalog.py) | 完整中文图鉴 + 动态索引 Steam 本体及 DLC 全量饰品与怪癖库 |
+| [torch_pc/save_editor.py](dd-steam-toolkit/torch_pc/save_editor.py) | 全维度二进制存档修改引擎（写前强制留档、兼容 Steam 绝对/百分比血量） |
+| [torch_pc/content_modifier.py](dd-steam-toolkit/torch_pc/content_modifier.py) | 非破坏性规则 Mod 生成器（4 套预设 + 本体/DLC 英雄倍率 + 建筑折扣 + Steam 直装挂载） |
+| [torch_pc/mod_manager.py](dd-steam-toolkit/torch_pc/mod_manager.py) | Steam 创意工坊与本地 Mod 槽位加载排序管理（严格保留 `Steam` / `mod` 来源） |
+| [torch_pc/web_server.py](dd-steam-toolkit/torch_pc/web_server.py) | 零依赖 `127.0.0.1` 会话令牌本地服务与 Edge/Chrome `--app` 独立桌面窗口启动器 |
+| [torch_pc/cli.py](dd-steam-toolkit/torch_pc/cli.py) | 完整 CLI（`ui`、`detect`、`watch`、`snapshot`、`edit-save`、`build-mod`、`mods`） |
+| [torch_pc/web_ui/](dd-steam-toolkit/torch_pc/web_ui/index.html) | 余烬深色桌面端单页前端（`index.html`、`style.css`、`app.js`） |
+| [tests/test_toolkit.py](dd-steam-toolkit/tests/test_toolkit.py) | 单元测试、HTTP API 端到端测试及本机真实 Steam 存档副本回归测试 |
+
 ### 5. 原生 Hook、Java 主机测试集与 v1 历史参考（`game-patch/`）
 
 详细说明见 [game-patch/README.md](game-patch/README.md)。
@@ -132,7 +155,8 @@
 | 构建约 15 MB 薄壳启动器 APK | [docs/BUILD-AND-TEST.md](docs/BUILD-AND-TEST.md) | [launcher-build.py](launcher-build.py)、[app/build.gradle](app/build.gradle) |
 | 从正版 Steam 转换生成 `dd_assets.pak` 并校验 | [docs/BUILD-AND-TEST.md](docs/BUILD-AND-TEST.md) | [dd-steam-converter/run.py](dd-steam-converter/run.py)、[pak_builder.py](dd-steam-converter/dd_converter/pak_builder.py) |
 | 理解 A2-2 外置直读、Smali Hook 或 ASTC 纹理原理 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | [PakMount.java](app/src/main/java/dev/torcharchive/game/PakMount.java)、[dds_encoder.py](dd-steam-converter/dd_converter/dds_encoder.py) |
-| 修改存档（金币、英雄属性/怪癖、饰品、建筑、原始字段） | [docs/MODIFIER-GUIDE.md](docs/MODIFIER-GUIDE.md) | [SaveEditor.java](app/src/main/java/dev/torcharchive/game/SaveEditor.java)、[save_editor.py](dd-steam-converter/dd_converter/save_editor.py) |
+| 修改存档（金币、英雄属性/怪癖、饰品、建筑、原始字段） | [docs/MODIFIER-GUIDE.md](docs/MODIFIER-GUIDE.md) | [SaveEditor.java](app/src/main/java/dev/torcharchive/game/SaveEditor.java)、[torch_pc/save_editor.py](dd-steam-toolkit/torch_pc/save_editor.py) |
+| 纯 PC Steam 实时自动留档、原子回档与独立桌面修改器 | [dd-steam-toolkit/README.md](dd-steam-toolkit/README.md) | [dd-steam-toolkit/run.py](dd-steam-toolkit/run.py)、[启动余烬PC工坊.bat](dd-steam-toolkit/启动余烬PC工坊.bat) |
 | 生成非破坏性游戏规则修改 Mod（堆叠、倍速、全员数值等） | [docs/MODIFIER-GUIDE.md](docs/MODIFIER-GUIDE.md) | [ContentModGenerator.java](app/src/main/java/dev/torcharchive/game/ContentModGenerator.java)、[content_modifier.py](dd-steam-converter/dd_converter/content_modifier.py) |
 | 适配手机/平板/折叠屏分辨率与刘海避让 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | [DisplayConfig.java](app/src/main/java/dev/torcharchive/game/DisplayConfig.java) |
 | 运行 Python 与 Java 主机自动化测试 | [docs/BUILD-AND-TEST.md](docs/BUILD-AND-TEST.md) | [test_converter.py](dd-steam-converter/tests/test_converter.py)、[UnifiedEngineCheck.java](game-patch/test/dev/torcharchive/game/UnifiedEngineCheck.java) |

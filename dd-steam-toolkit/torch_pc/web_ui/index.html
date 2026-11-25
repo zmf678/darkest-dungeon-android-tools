@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="torch-token" content="__TORCH_TOKEN__">
+  <title>暗黑地牢 · 余烬 PC 工坊 (Steam 版)</title>
+  <link rel="stylesheet" href="/assets/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">🔥</div>
+        <div>
+          <div class="brand-title">余烬 PC 工坊</div>
+          <div class="brand-sub">Steam 存档管家 &amp; 完整修改器</div>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="主功能导航">
+        <button type="button" class="nav-btn active" data-view="overview">
+          <span class="nav-icon">❖</span><span>概览与 Steam 环境</span>
+        </button>
+        <button type="button" class="nav-btn" data-view="saves">
+          <span class="nav-icon">◫</span><span>存档档案柜 &amp; 自动留档</span>
+          <span class="nav-badge" id="nav-snap-count">0</span>
+        </button>
+        <button type="button" class="nav-btn" data-view="editor">
+          <span class="nav-icon">✦</span><span>全维度存档修改器</span>
+        </button>
+        <button type="button" class="nav-btn" data-view="rules">
+          <span class="nav-icon">⚙</span><span>非破坏性规则 Mod</span>
+          <span class="nav-badge" id="nav-rule-badge">未启</span>
+        </button>
+        <button type="button" class="nav-btn" data-view="mods">
+          <span class="nav-icon">▤</span><span>Steam 模组加载排序</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="status-pill" id="sidebar-watcher-pill">
+          <span class="dot"></span>
+          <span id="sidebar-watcher-text">自动留档监听中</span>
+        </div>
+        <div class="status-pill" id="sidebar-game-pill">
+          <span class="dot muted"></span>
+          <span id="sidebar-game-text">游戏未运行（可安全写入）</span>
+        </div>
+        <button type="button" class="btn btn-primary full" id="btn-launch-game">启动 Steam《暗黑地牢》</button>
+      </div>
+    </aside>
+
+    <div class="main-wrap">
+      <header class="topbar">
+        <div class="topbar-left">
+          <h1 id="page-title">概览与 Steam 环境</h1>
+          <p id="page-subtitle">自动对接本机 Steam《暗黑地牢》，支持实时自动留档、原子回档、无损二进制 DSON 精修与非破坏性规则覆写</p>
+        </div>
+        <div class="topbar-right">
+          <label class="inline-check" title="仅当你确信需要强制写入时开启；建议先退出游戏避免内存回写覆盖">
+            <input type="checkbox" id="chk-force-write">
+            <span>允许运行中写入</span>
+          </label>
+          <button type="button" class="btn" id="btn-refresh-all">刷新同步</button>
+        </div>
+      </header>
+
+      <div id="game-running-banner" class="alert-banner hidden" role="status">
+        <strong>检测到 Darkest.exe 正在运行：</strong>
+        为防止游戏内存回写或 Steam Cloud 同步覆盖修改结果，建议先保存并退出《暗黑地牢》再执行回档或写档操作。自动留档功能在游戏运行期间可照常实时工作。
+      </div>
+
+      <main class="content" id="main-content">
+        <!-- VIEW 1: OVERVIEW -->
+        <section class="view active" id="view-overview">
+          <div class="grid-2">
+            <div class="card">
+              <div class="card-head">
+                <h2>Steam 环境探测</h2>
+                <span class="pill gold" id="ov-version">v1.0.0</span>
+              </div>
+              <div class="kv-list" id="ov-env-kv"></div>
+              <div class="btn-row mt-12">
+                <button type="button" class="btn" data-open-folder="saves">打开存档目录</button>
+                <button type="button" class="btn" data-open-folder="mods">打开 Steam mods</button>
+                <button type="button" class="btn" data-open-folder="snapshots">打开快照库</button>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h2>Steam 账号与自定义路径</h2>
+                <span class="pill" id="ov-account-count">0 账号</span>
+              </div>
+              <div class="field">
+                <label for="ov-account-select">选择已探测到的 Steam 账号 / 存档源</label>
+                <select id="ov-account-select"></select>
+              </div>
+              <div class="field">
+                <label for="ov-game-dir">Steam 游戏根目录（留空自动探测）</label>
+                <input type="text" id="ov-game-dir" placeholder="例如 D:\Steam\steamapps\common\DarkestDungeon">
+              </div>
+              <div class="field">
+                <label for="ov-saves-root">存档根目录 remote/（留空自动探测）</label>
+                <input type="text" id="ov-saves-root" placeholder="例如 D:\Steam\userdata\<UID>\262060\remote">
+              </div>
+              <div class="btn-row mt-12">
+                <button type="button" class="btn btn-primary" id="btn-save-paths">保存路径并重新扫描</button>
+                <button type="button" class="btn" id="btn-reset-paths">恢复自动探测</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card mt-14">
+            <div class="card-head">
+              <h2>当前检测到的存档槽位</h2>
+              <span class="pill arcane" id="ov-dlc-summary">DLC: 0</span>
+            </div>
+            <div class="slot-cards" id="ov-slot-cards"></div>
+          </div>
+
+          <div class="card mt-14">
+            <div class="card-head">
+              <h2>Steam 版安全护航与云同步须知</h2>
+              <span class="pill green">三重安全保护</span>
+            </div>
+            <ul class="guide-list">
+              <li><strong>写前强制留档</strong>：无论修改金币、英雄、饰品、建筑、原始 DSON 还是 Mod 顺序，每次写盘前都会自动拍一份 SHA-256 校验快照，可随时在「存档档案柜」一键原子回退。</li>
+              <li><strong>游戏内实时自动留档</strong>：开启自动留档后，后台线程每隔 1.5 秒监测 <code>profile_0..8</code> 变动（对标安卓端 <code>libtorcharchive.so</code>），进房间、战斗结束或返回城镇自动生成去重快照，告别死档与团灭遗憾。</li>
+              <li><strong>Steam 云同步协作</strong>：改档或回档建议在<strong>退出游戏后、再次启动前</strong>执行。Steam 下次启动检测到本地存档更新后会优先读取新版并同步至 Steam Cloud；若弹窗提示云冲突，请选择「上传本地文件」。</li>
+              <li><strong>创意工坊 Mod 完整兼容</strong>：挂载非破坏性规则 Mod <code>torch_content_modifier</code> 时，原有创意工坊 Mod 会严格保留 <code>source: Steam</code>，不会破坏你的工坊订阅。</li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- VIEW 2: SAVES VAULT & AUTO-WATCHER -->
+        <section class="view" id="view-saves">
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <h2>实时自动留档与手动快照</h2>
+                <p class="muted-text" id="watcher-detail-text">监测 Steam 存档目录变动并自动生成 SHA-256 校验快照</p>
+              </div>
+              <div class="btn-row">
+                <button type="button" class="btn btn-primary" id="btn-toggle-watcher">开启自动留档</button>
+                <button type="button" class="btn" id="btn-prune-snaps">清理冗余自动快照</button>
+              </div>
+            </div>
+
+            <div class="toolbar mt-12">
+              <select id="snap-backup-slot" aria-label="选择要手动留档的档位"></select>
+              <input type="text" id="snap-backup-note" placeholder="可选：输入手动留档备注（例如：进极暗地牢前）">
+              <button type="button" class="btn btn-primary" id="btn-manual-backup">立即手动留档</button>
+              <button type="button" class="btn" id="btn-open-import-dialog">导入外部 ZIP 存档</button>
+            </div>
+          </div>
+
+          <div class="card mt-14">
+            <div class="card-head">
+              <h2>快照时间轴</h2>
+              <div class="chip-row" id="snap-filter-chips"></div>
+            </div>
+            <div id="snap-list" class="snap-list"></div>
+          </div>
+        </section>
+
+        <!-- VIEW 3: COMPLETE SAVE EDITOR -->
+        <section class="view" id="view-editor">
+          <div class="card">
+            <div class="card-head">
+              <h2>选择编辑档位</h2>
+              <div class="btn-row">
+                <a class="btn" id="btn-dump-json" href="#" download>导出全字段 JSON</a>
+              </div>
+            </div>
+            <div class="chip-row" id="ed-slot-chips"></div>
+            <div class="kpi-grid mt-12" id="ed-kpi-grid"></div>
+          </div>
+
+          <div class="subtab-bar mt-12" id="ed-subtabs">
+            <button type="button" class="subtab active" data-subtab="estate">庄园与货币</button>
+            <button type="button" class="subtab" data-subtab="heroes">花名册英雄 (<span id="ed-hero-cnt">0</span>)</button>
+            <button type="button" class="subtab" data-subtab="trinkets">饰品仓库 (<span id="ed-trinket-cnt">0</span>)</button>
+            <button type="button" class="subtab" data-subtab="progress">城镇与地牢</button>
+            <button type="button" class="subtab" data-subtab="raw">原始 DSON 浏览器</button>
+          </div>
+
+          <!-- Sub-tab: Estate -->
+          <div class="subpanel active" id="sub-estate">
+            <div class="grid-2">
+              <div class="card">
+                <div class="card-head"><h3>庄园名号与游戏难度</h3></div>
+                <div class="field">
+                  <label for="ed-estate-name">庄园名称</label>
+                  <input type="text" id="ed-estate-name">
+                </div>
+                <div class="field">
+                  <label>难度模式（点击切换）</label>
+                  <div class="mode-grid" id="ed-mode-grid">
+                    <button type="button" class="mode-tile" data-mode="radiant"><strong>光辉</strong><span>轻松节奏</span></button>
+                    <button type="button" class="mode-tile" data-mode="darkest"><strong>极暗</strong><span>标准体验</span></button>
+                    <button type="button" class="mode-tile" data-mode="new_game_plus"><strong>血月 / 冥暗</strong><span>高难挑战</span></button>
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="ed-endless-hs">无尽农庄最高波次</label>
+                  <input type="number" id="ed-endless-hs" min="0" step="1">
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-head">
+                  <h3>金库与传家宝</h3>
+                  <div class="btn-row">
+                    <button type="button" class="btn btn-sm" id="btn-add-100k">+10万金币</button>
+                    <button type="button" class="btn btn-sm" id="btn-add-100h">+100全传家宝</button>
+                    <button type="button" class="btn btn-sm btn-primary" id="btn-max-wallet">一键全拉满</button>
+                  </div>
+                </div>
+                <div class="wallet-grid" id="ed-wallet-grid"></div>
+                <div class="mt-14">
+                  <button type="button" class="btn btn-primary full" id="btn-save-estate">保存庄园与全部货币修改</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sub-tab: Heroes -->
+          <div class="subpanel" id="sub-heroes">
+            <div class="card">
+              <div class="toolbar">
+                <input type="search" id="ed-hero-search" placeholder="按英雄姓名或职业搜索（例如 迪斯马 / 十字军 / highwayman）…">
+                <button type="button" class="btn btn-primary" id="btn-batch-heal">全体满血清压清病复活</button>
+                <button type="button" class="btn" id="btn-batch-max">全体满级满装 (Lv.6)</button>
+              </div>
+              <div class="chip-row mt-10" id="ed-hero-filters"></div>
+            </div>
+            <div class="hero-grid mt-12" id="ed-hero-list"></div>
+          </div>
+
+          <!-- Sub-tab: Trinkets -->
+          <div class="subpanel" id="sub-trinkets">
+            <div class="card">
+              <div class="toolbar">
+                <input type="search" id="ed-trinket-search" placeholder="搜索仓库中已拥有的饰品（中文名 / 英文 ID / 分类）…">
+                <button type="button" class="btn btn-primary" id="btn-open-codex">+ 打开分类饰品图鉴 / 批量添加</button>
+              </div>
+            </div>
+            <div class="trinket-grid mt-12" id="ed-trinket-list"></div>
+          </div>
+
+          <!-- Sub-tab: Progress -->
+          <div class="subpanel" id="sub-progress">
+            <div class="grid-2">
+              <div class="card">
+                <div class="card-head">
+                  <h3>城镇 8 座核心建筑升级</h3>
+                  <button type="button" class="btn btn-primary" id="btn-unlock-buildings">一键解锁全部建筑满级</button>
+                </div>
+                <p class="muted-text">自动计算 20 棵建筑升级树 Red Hook 哈希并无损合并写入 <code>persist.upgrades.json</code>。</p>
+                <div class="building-grid mt-12" id="ed-building-grid"></div>
+              </div>
+
+              <div class="card">
+                <div class="card-head">
+                  <h3>各地牢区域探索进度 (XP)</h3>
+                  <button type="button" class="btn btn-sm" id="btn-max-dungeons">全区满级 (150 XP)</button>
+                </div>
+                <div class="dungeon-grid mt-12" id="ed-dungeon-grid"></div>
+                <div class="mt-14">
+                  <button type="button" class="btn btn-primary full" id="btn-save-dungeons">保存地牢区域进度</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sub-tab: Raw DSON -->
+          <div class="subpanel" id="sub-raw">
+            <div class="card">
+              <div class="card-head">
+                <h3>全字段原始二进制 DSON 浏览器</h3>
+                <span class="pill">支持穿透英雄嵌套 DSON</span>
+              </div>
+              <div class="chip-row" id="ed-dson-files"></div>
+              <div class="breadcrumbs mt-10" id="ed-raw-crumbs"></div>
+              <div class="toolbar mt-10">
+                <input type="search" id="ed-raw-search" placeholder="筛选当前层级字段名或值…">
+              </div>
+            </div>
+            <div class="raw-list mt-12" id="ed-raw-list"></div>
+          </div>
+        </section>
+
+        <!-- VIEW 4: NON-DESTRUCTIVE RULES MODIFIER -->
+        <section class="view" id="view-rules">
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <h2>非破坏性游戏规则修改器 (<code>torch_content_modifier</code>)</h2>
+                <p class="muted-text">生成标准 Darkest Dungeon 覆盖 Mod 安装至 Steam <code>mods/</code>，零改动游戏原文件，随时可一键卸载还原。</p>
+              </div>
+              <span class="pill" id="rule-status-pill">未安装</span>
+            </div>
+            <div class="preset-row mt-12">
+              <button type="button" class="btn" data-preset="vanilla">还原原版</button>
+              <button type="button" class="btn" data-preset="chill">轻度舒适</button>
+              <button type="button" class="btn" data-preset="adventurer">爽快开荒</button>
+              <button type="button" class="btn btn-primary" data-preset="godmode">终极无双</button>
+            </div>
+          </div>
+
+          <div class="grid-2 mt-14">
+            <div class="card">
+              <h3>一 · 背包、饰品槽与补给</h3>
+              <div class="rule-row">
+                <label>金币 / 传家宝 / 补给堆叠倍率</label>
+                <div class="seg-group" data-rule="stack_multiplier" data-type="int">
+                  <button type="button" data-val="1">1x</button>
+                  <button type="button" data-val="2">2x</button>
+                  <button type="button" data-val="5">5x</button>
+                  <button type="button" data-val="10">10x</button>
+                  <button type="button" data-val="99">99x</button>
+                </div>
+              </div>
+              <div class="rule-row">
+                <label>英雄饰品装备槽位</label>
+                <div class="seg-group" data-rule="hero_trinket_slots" data-type="int">
+                  <button type="button" data-val="2">原版 2 格</button>
+                  <button type="button" data-val="3">3 格</button>
+                  <button type="button" data-val="4">4 格</button>
+                </div>
+              </div>
+              <div class="rule-row">
+                <label>远征背包格数</label>
+                <div class="seg-group" data-rule="raid_inventory_slots" data-type="int">
+                  <button type="button" data-val="16">原版 16 格</button>
+                  <button type="button" data-val="20">20 格</button>
+                  <button type="button" data-val="24">24 格</button>
+                </div>
+              </div>
+              <label class="toggle-card">
+                <input type="checkbox" data-rule-check="free_supplies">
+                <div><strong>出征补给品全部免费</strong><span>食物、火把、铲子、绷带、解毒剂、钥匙价格归零</span></div>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>二 · 战斗节奏与输出体验</h3>
+              <div class="rule-row">
+                <label>战斗动画速度倍率</label>
+                <div class="seg-group" data-rule="combat_speed_scale" data-type="float">
+                  <button type="button" data-val="1">1.0x</button>
+                  <button type="button" data-val="1.5">1.5x</button>
+                  <button type="button" data-val="2">2.0x</button>
+                  <button type="button" data-val="3">3.0x</button>
+                  <button type="button" data-val="4">4.0x</button>
+                </div>
+              </div>
+              <div class="rule-row">
+                <label>我方暴击伤害倍率</label>
+                <div class="seg-group" data-rule="player_crit_multiplier" data-type="float">
+                  <button type="button" data-val="1.5">1.5x</button>
+                  <button type="button" data-val="2">2.0x</button>
+                  <button type="button" data-val="2.5">2.5x</button>
+                  <button type="button" data-val="3">3.0x</button>
+                </div>
+              </div>
+              <label class="toggle-card">
+                <input type="checkbox" data-rule-hit100="always_hit_cap">
+                <div><strong>解除 95% 命中上限</strong><span>精准达标时真正 100% 命中，告别必中空挥</span></div>
+              </label>
+              <label class="toggle-card">
+                <input type="checkbox" data-rule-check="guaranteed_retreat">
+                <div><strong>100% 无损撤退</strong><span>战斗撤退必定成功且不增加额外压力</span></div>
+              </label>
+            </div>
+
+            <div class="card">
+              <h3>三 · 压力管理与美德触发</h3>
+              <div class="rule-row">
+                <label>100 压力时美德概率</label>
+                <div class="seg-group" data-rule="virtue_chance_percent" data-type="int">
+                  <button type="button" data-val="25">25%</button>
+                  <button type="button" data-val="50">50%</button>
+                  <button type="button" data-val="75">75%</button>
+                  <button type="button" data-val="100">必出 100%</button>
+                </div>
+              </div>
+              <div class="rule-row">
+                <label>我方承受压力倍率</label>
+                <div class="seg-group" data-rule="stress_scale" data-type="float">
+                  <button type="button" data-val="1">100%</button>
+                  <button type="button" data-val="0.5">50%</button>
+                  <button type="button" data-val="0.25">25%</button>
+                  <button type="button" data-val="0">零压 0%</button>
+                </div>
+              </div>
+              <div class="rule-row">
+                <label>城镇闲置每周自动回压</label>
+                <div class="seg-group" data-rule="idle_stress_heal" data-type="float">
+                  <button type="button" data-val="5">原版 5</button>
+                  <button type="button" data-val="25">25</button>
+                  <button type="button" data-val="50">50</button>
+                  <button type="button" data-val="100">全清 100</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>四 · 马车招募与养成速度</h3>
+              <div class="rule-row">
+                <label>马车每周刷新人数倍率</label>
+                <div class="seg-group" data-rule="stage_coach_multiplier" data-type="int">
+                  <button type="button" data-val="1">1x</button>
+                  <button type="button" data-val="2">2x</button>
+                  <button type="button" data-val="3">3x</button>
+                </div>
+              </div>
+              <div class="rule-row">
+                <label>花名册容量额外扩容</label>
+                <div class="seg-group" data-rule="roster_capacity_bonus" data-type="int">
+                  <button type="button" data-val="0">+0</button>
+                  <button type="button" data-val="20">+20</button>
+                  <button type="button" data-val="50">+50</button>
+                  <button type="button" data-val="100">+100</button>
+                </div>
+              </div>
+              <label class="toggle-card">
+                <input type="checkbox" data-rule-check="fast_resolve_xp">
+                <div><strong>极速决心升级</strong><span>大幅降低英雄升至 Lv.6 所需远征经验阈值</span></div>
+              </label>
+            </div>
+          </div>
+
+          <div class="card mt-14">
+            <div class="card-head">
+              <h3>五 · PC Steam 专属深度数值覆写（同步覆盖本体与已购 DLC 英雄）</h3>
+              <span class="pill gold">Steam 目录直读</span>
+            </div>
+            <div class="grid-3 mt-10">
+              <div class="field">
+                <label for="rule-hero-hp">全英雄生命倍率 (1.0 – 3.0)</label>
+                <input type="number" id="rule-hero-hp" min="1" max="5" step="0.25" value="1">
+              </div>
+              <div class="field">
+                <label for="rule-hero-dmg">全英雄伤害倍率 (1.0 – 3.0)</label>
+                <input type="number" id="rule-hero-dmg" min="1" max="5" step="0.25" value="1">
+              </div>
+              <div class="field">
+                <label for="rule-hero-spd">全英雄速度加成 (+0 – +10)</label>
+                <input type="number" id="rule-hero-spd" min="0" max="20" step="1" value="0">
+              </div>
+              <div class="field">
+                <label for="rule-hero-dodge">全英雄闪避加成 (+0 – +30)</label>
+                <input type="number" id="rule-hero-dodge" min="0" max="50" step="5" value="0">
+              </div>
+              <div class="field">
+                <label for="rule-bld-discount">城镇建筑升级费用折扣 % (0 – 100)</label>
+                <input type="number" id="rule-bld-discount" min="0" max="100" step="10" value="0">
+              </div>
+              <div class="field">
+                <label for="rule-enable-slot">安装后自动置顶挂载到档位</label>
+                <select id="rule-enable-slot"></select>
+              </div>
+            </div>
+            <div class="btn-row mt-14">
+              <button type="button" class="btn btn-primary" id="btn-apply-rules">生成并安装到 Steam mods/</button>
+              <button type="button" class="btn" id="btn-export-rules-zip">导出通用 Mod ZIP</button>
+              <button type="button" class="btn btn-danger" id="btn-uninstall-rules">卸载规则 Mod 并恢复原版</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 5: STEAM MOD MANAGER -->
+        <section class="view" id="view-mods">
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <h2>Steam 档位模组加载排序</h2>
+                <p class="muted-text">直接管理 <code>applied_ugcs_1_0</code>，严格保留创意工坊 <code>Steam</code> 与本地 <code>mod</code> 来源，排名越靠前优先级越高。</p>
+              </div>
+              <div class="btn-row">
+                <select id="mod-slot-select" aria-label="选择模组管理档位"></select>
+                <button type="button" class="btn btn-primary" id="btn-save-mods">保存该档位模组配置</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid-2 mt-14">
+            <div class="card">
+              <div class="card-head">
+                <h3>当前档位已启用（按加载优先级）</h3>
+                <span class="pill green" id="mod-active-cnt">0</span>
+              </div>
+              <div id="mod-active-list" class="mod-list"></div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">
+                <h3>本机未启用的创意工坊 / 本地 Mod</h3>
+                <span class="pill" id="mod-inactive-cnt">0</span>
+              </div>
+              <input type="search" id="mod-search" class="mb-10" placeholder="搜索 Mod 名称或 ID…">
+              <div id="mod-inactive-list" class="mod-list"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- MODAL 1: HERO ATTRIBUTE EDITOR -->
+  <dialog id="dlg-hero" class="modal modal-lg" closedby="any" aria-labelledby="dlg-hero-title">
+    <div class="modal-head">
+      <div>
+        <h1 id="dlg-hero-title">英雄属性精修</h1>
+        <p class="muted-text" id="dlg-hero-sub"></p>
+      </div>
+      <form method="dialog"><button type="submit" class="btn btn-sm" value="cancel">关闭</button></form>
+    </div>
+    <div class="modal-body" id="dlg-hero-body"></div>
+    <div class="modal-foot">
+      <button type="button" class="btn" id="btn-hero-to-quirks">切换至怪癖与疾病 →</button>
+      <div class="spacer"></div>
+      <form method="dialog"><button type="submit" class="btn" value="cancel">取消</button></form>
+      <button type="button" class="btn btn-primary" id="btn-hero-save">保存英雄全部修改</button>
+    </div>
+  </dialog>
+
+  <!-- MODAL 2: HERO QUIRKS & DISEASES -->
+  <dialog id="dlg-quirks" class="modal modal-lg" closedby="any" aria-labelledby="dlg-quirks-title">
+    <div class="modal-head">
+      <div>
+        <h1 id="dlg-quirks-title">怪癖与疾病精修</h1>
+        <p class="muted-text" id="dlg-quirks-sub"></p>
+      </div>
+      <form method="dialog"><button type="submit" class="btn btn-sm" value="cancel">关闭</button></form>
+    </div>
+    <div class="modal-body" id="dlg-quirks-body"></div>
+    <div class="modal-foot">
+      <button type="button" class="btn" id="btn-quirks-to-hero">← 返回属性精修</button>
+      <div class="spacer"></div>
+      <form method="dialog"><button type="submit" class="btn" value="cancel">取消</button></form>
+      <button type="button" class="btn btn-primary" id="btn-quirks-save">保存怪癖与疾病到存档</button>
+    </div>
+  </dialog>
+
+  <!-- MODAL 3: TRINKET CODEX -->
+  <dialog id="dlg-codex" class="modal modal-lg" closedby="any" aria-labelledby="dlg-codex-title">
+    <div class="modal-head">
+      <div>
+        <h1 id="dlg-codex-title">分类饰品图鉴</h1>
+        <p class="muted-text">内置中文精选图鉴 + 自动扫描本机 Steam 本体及已购 DLC 全量饰品</p>
+      </div>
+      <form method="dialog"><button type="submit" class="btn btn-sm" value="cancel">关闭</button></form>
+    </div>
+    <div class="modal-body" id="dlg-codex-body"></div>
+  </dialog>
+
+  <!-- MODAL 4: RAW DSON SCALAR EDITOR -->
+  <dialog id="dlg-raw" class="modal" closedby="any" aria-labelledby="dlg-raw-title">
+    <div class="modal-head">
+      <div>
+        <h1 id="dlg-raw-title">编辑原始 DSON 节点</h1>
+        <p class="muted-text mono" id="dlg-raw-path"></p>
+      </div>
+      <form method="dialog"><button type="submit" class="btn btn-sm" value="cancel">关闭</button></form>
+    </div>
+    <div class="modal-body" id="dlg-raw-body"></div>
+    <div class="modal-foot">
+      <div class="spacer"></div>
+      <form method="dialog"><button type="submit" class="btn" value="cancel">取消</button></form>
+      <button type="button" class="btn btn-primary" id="btn-raw-save">校验并写入存档</button>
+    </div>
+  </dialog>
+
+  <!-- MODAL 5: IMPORT SAVE ZIP -->
+  <dialog id="dlg-import" class="modal" closedby="any" aria-labelledby="dlg-import-title">
+    <div class="modal-head">
+      <div>
+        <h1 id="dlg-import-title">导入外部存档 ZIP</h1>
+        <p class="muted-text">支持导入 Steam 备份 ZIP、历史快照 ZIP 或安卓「余烬启动器」导出的存档 ZIP</p>
+      </div>
+      <form method="dialog"><button type="submit" class="btn btn-sm" value="cancel">关闭</button></form>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label for="imp-file">选择存档 ZIP 文件</label>
+        <input type="file" id="imp-file" accept=".zip">
+      </div>
+      <div class="field">
+        <label for="imp-slot">目标档位（默认按 ZIP 内 profile_N 自动匹配）</label>
+        <select id="imp-slot">
+          <option value="">自动匹配 ZIP 内原档位</option>
+          <option value="profile_0">强制写入档位 1 (profile_0)</option>
+          <option value="profile_1">强制写入档位 2 (profile_1)</option>
+          <option value="profile_2">强制写入档位 3 (profile_2)</option>
+          <option value="profile_3">强制写入档位 4 (profile_3)</option>
+          <option value="profile_4">强制写入档位 5 (profile_4)</option>
+          <option value="profile_5">强制写入档位 6 (profile_5)</option>
+          <option value="profile_6">强制写入档位 7 (profile_6)</option>
+          <option value="profile_7">强制写入档位 8 (profile_7)</option>
+          <option value="profile_8">强制写入档位 9 (profile_8)</option>
+        </select>
+      </div>
+      <label class="toggle-card">
+        <input type="checkbox" id="imp-convert-steam" checked>
+        <div><strong>自动还原创意工坊 Mod 来源为 Steam</strong><span>从安卓端导回 PC 时，若本机创意工坊已订阅对应 ID，自动将 <code>source: mod</code> 还原为 <code>Steam</code></span></div>
+      </label>
+    </div>
+    <div class="modal-foot">
+      <div class="spacer"></div>
+      <form method="dialog"><button type="submit" class="btn" value="cancel">取消</button></form>
+      <button type="button" class="btn btn-primary" id="btn-import-submit">备份现役档位并导入</button>
+    </div>
+  </dialog>
+
+  <!-- MODAL 6: SNAPSHOT DIFF VIEWER -->
+  <dialog id="dlg-diff" class="modal" closedby="any" aria-labelledby="dlg-diff-title">
+    <div class="modal-head">
+      <div>
+        <h1 id="dlg-diff-title">快照文件变更对比</h1>
+        <p class="muted-text" id="dlg-diff-sub"></p>
+      </div>
+      <form method="dialog"><button type="submit" class="btn btn-sm" value="cancel">关闭</button></form>
+    </div>
+    <div class="modal-body" id="dlg-diff-body"></div>
+  </dialog>
+
+  <div id="toast-box" class="toast-box" aria-live="polite"></div>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>

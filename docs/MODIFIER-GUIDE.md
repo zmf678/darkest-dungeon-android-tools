@@ -1,8 +1,8 @@
 # 游戏内容完整修改器使用与开发指南（Android + PC）
 
-> 返回导航：[工作区总索引](../INDEX.md) · [项目总览](../README.md) · [系统架构](ARCHITECTURE.md) · [PC 工具链说明](../dd-steam-converter/README.md)
+> 返回导航：[工作区总索引](../INDEX.md) · [项目总览](../README.md) · [PC Steam 独立存档与修改器](../dd-steam-toolkit/README.md) · [系统架构](ARCHITECTURE.md) · [PC 工具链说明](../dd-steam-converter/README.md)
 
-《暗黑地牢》余烬项目在**手机启动器端**与 **PC 桌面端**同时提供完整双轨修改能力：
+《暗黑地牢》余烬项目在**手机启动器端**与 **PC 桌面端**（推荐纯 PC Steam 玩家直接使用独立的 [dd-steam-toolkit/](../dd-steam-toolkit/README.md)）同时提供完整双轨修改能力：
 1. **二进制存档修改器**：直接无损读写档位 `profile_N/` 内的 `persist.*.json`（含英雄嵌套 DSON）；
 2. **非破坏性游戏规则修改器**：生成标准覆盖 Mod `torch_content_modifier`，PC Steam 与安卓端通用，可随时一键启用或卸载，不破坏原始资源包 `dd_assets.pak`。
 
@@ -10,13 +10,13 @@
 
 ## 1. 双端修改器模块对照
 
-| 能力模块 | Android 启动器端 | PC 工具链端（CLI & GUI） |
-| :--- | :--- | :--- |
-| 修改入口 | 主界面「修改」页签（[MainActivity.java](../app/src/main/java/dev/torcharchive/dd/MainActivity.java) + [ModifierSection.java](../app/src/main/java/dev/torcharchive/dd/ModifierSection.java)） | [run.py](../dd-steam-converter/run.py) `edit-save` / `build-mod` / `gui`（[cli.py](../dd-steam-converter/dd_converter/cli.py)、[gui.py](../dd-steam-converter/dd_converter/gui.py)） |
-| DSON 编解码底层 | [DsonCodec.java](../app/src/main/java/dev/torcharchive/game/DsonCodec.java) | [dson.py](../dd-steam-converter/dd_converter/dson.py) |
-| 二进制存档编辑 | [SaveEditor.java](../app/src/main/java/dev/torcharchive/game/SaveEditor.java) | [save_editor.py](../dd-steam-converter/dd_converter/save_editor.py) |
-| 规则覆盖 Mod 生成 | [ContentModGenerator.java](../app/src/main/java/dev/torcharchive/game/ContentModGenerator.java) | [content_modifier.py](../dd-steam-converter/dd_converter/content_modifier.py) |
-| 写前安全机制 | 停止 `:nx` 进程 + [SnapshotStore.java](../app/src/main/java/dev/torcharchive/game/SnapshotStore.java) 先行留档 | 自动备份原始 `profile_N` 到 `.torch-backups/` |
+| 能力模块 | Android 启动器端 | PC Steam 独立工坊（推荐） | PC 转换器附带端 |
+| :--- | :--- | :--- | :--- |
+| 修改入口 | 主界面「修改」页签（[MainActivity.java](../app/src/main/java/dev/torcharchive/dd/MainActivity.java) + [ModifierSection.java](../app/src/main/java/dev/torcharchive/dd/ModifierSection.java)） | [dd-steam-toolkit/run.py](../dd-steam-toolkit/run.py) / [启动余烬PC工坊.bat](../dd-steam-toolkit/启动余烬PC工坊.bat)（独立桌面窗口 + 完整 CLI） | [dd-steam-converter/run.py](../dd-steam-converter/run.py) `edit-save` / `build-mod` / `gui` |
+| DSON 编解码底层 | [DsonCodec.java](../app/src/main/java/dev/torcharchive/game/DsonCodec.java) | [torch_pc/dson.py](../dd-steam-toolkit/torch_pc/dson.py) | [dson.py](../dd-steam-converter/dd_converter/dson.py) |
+| 二进制存档编辑 | [SaveEditor.java](../app/src/main/java/dev/torcharchive/game/SaveEditor.java) | [torch_pc/save_editor.py](../dd-steam-toolkit/torch_pc/save_editor.py) | [save_editor.py](../dd-steam-converter/dd_converter/save_editor.py) |
+| 规则覆盖 Mod 生成 | [ContentModGenerator.java](../app/src/main/java/dev/torcharchive/game/ContentModGenerator.java) | [torch_pc/content_modifier.py](../dd-steam-toolkit/torch_pc/content_modifier.py)（含本体+DLC 英雄与建筑折扣） | [content_modifier.py](../dd-steam-converter/dd_converter/content_modifier.py) |
+| 写前安全与自动留档 | 停止 `:nx` + [SnapshotStore.java](../app/src/main/java/dev/torcharchive/game/SnapshotStore.java) | `Darkest.exe` 检测 + [snapshot_store.py](../dd-steam-toolkit/torch_pc/snapshot_store.py) + 后台实时自动留档 [save_watcher.py](../dd-steam-toolkit/torch_pc/save_watcher.py) | 自动备份到 `.torch-backups/` |
 
 ---
 
