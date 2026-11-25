@@ -21,7 +21,8 @@
 | [docs/M0-MUMU-POC-GUIDE.md](docs/M0-MUMU-POC-GUIDE.md) | *（归档备忘）* 路线 C 阶段 M0 MuMu Android 15 模拟器复现手册、避坑实录与交接清单 | 历史复现归档 |
 | [app/README.md](app/README.md) | Android 一体化启动器 `dev.torcharchive.ddgame` 包结构、UI 页签与引擎类说明 | Android 客户端开发者 |
 | [dd-steam-converter/README.md](dd-steam-converter/README.md) | PC 端 Steam 资源转换、存档迁移、ADB 推送、CLI/GUI 修改器说明 | PC 工具链开发者与桌面用户 |
-| [dd-steam-toolkit/README.md](dd-steam-toolkit/README.md) | 独立 PC Steam 版《暗黑地牢》余烬存档管家（实时自动留档/原子回档）与完整修改器说明 | PC Steam 玩家与桌面开发者 |
+| [dd-steam-toolkit/README.md](dd-steam-toolkit/README.md) | 独立 PC Steam 版《暗黑地牢》余烬存档管家（实时自动留档/原子回档）与完整修改器说明（简体中文） | PC Steam 玩家与桌面开发者 |
+| [dd-steam-toolkit/README.en.md](dd-steam-toolkit/README.en.md) | Standalone PC Steam Save Manager & Complete Modifier Guide (English) | International PC Steam users |
 | [game-patch/README.md](game-patch/README.md) | 原生 Hook（`commit.c`）、Java 主机测试集与 v1 双包方案历史参考 | 原生 Hook / 单测维护者 |
 | [DESIGN.md](DESIGN.md) | 余烬档案馆色彩、字体与原创头图提示词设计规范 | UI / 视觉设计人员 |
 | [PRODUCT.md](PRODUCT.md) | 初始产品定位简述 | 产品规划参考 |
@@ -148,7 +149,7 @@
 | 纯 PC Steam 实时自动留档、原子回档与独立桌面修改器 | [dd-steam-toolkit/README.md](dd-steam-toolkit/README.md) | [dd-steam-toolkit/run.py](dd-steam-toolkit/run.py)、[启动余烬PC工坊.bat](dd-steam-toolkit/启动余烬PC工坊.bat) |
 | 生成非破坏性游戏规则修改 Mod（堆叠、倍速、全员数值等） | [docs/MODIFIER-GUIDE.md](docs/MODIFIER-GUIDE.md) | [ContentModGenerator.java](app/src/main/java/dev/torcharchive/game/ContentModGenerator.java)、[content_modifier.py](dd-steam-converter/dd_converter/content_modifier.py) |
 | 适配手机/平板/折叠屏分辨率、60/90/120 Hz 高刷与挖孔避让 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | [DisplayConfig.java](app/src/main/java/dev/torcharchive/game/DisplayConfig.java) |
-| 运行 Python 与 Java 主机自动化测试 | [docs/BUILD-AND-TEST.md](docs/BUILD-AND-TEST.md) | [test_converter.py](dd-steam-converter/tests/test_converter.py)、[UnifiedEngineCheck.java](game-patch/test/dev/torcharchive/game/UnifiedEngineCheck.java) |
+| 运行 Python 与 Java 主机自动化测试 | [docs/BUILD-AND-TEST.md](docs/BUILD-AND-TEST.md) | [test_converter.py](dd-steam-converter/tests/test_converter.py)、[test_toolkit.py](dd-steam-toolkit/tests/test_toolkit.py)、[UnifiedEngineCheck.java](game-patch/test/dev/torcharchive/game/UnifiedEngineCheck.java) |
 
 ---
 

@@ -11,7 +11,7 @@
 > 4. **No Commercial Use or Redistribution**: Commercial use, paid bundling, DRM circumvention, or unauthorized redistribution of copyrighted game files or converted asset packs is strictly prohibited. Users bear sole responsibility for complying with applicable local laws and software EULAs.
 > 5. **Copyright Inquiries**: If any rights holder has concerns regarding content in this repository, please open an issue or contact the maintainer for prompt review and removal.
 
-> **Documentation**: [简体中文 README](README.md) · [Workspace Index](INDEX.md) · [Architecture Overview](docs/ARCHITECTURE.md) · [Modifier Guide](docs/MODIFIER-GUIDE.md) · [Build & Test Guide](docs/BUILD-AND-TEST.md) · [Android Launcher (`app/`)](app/README.md) · [PC Converter (`dd-steam-converter/`)](dd-steam-converter/README.md)
+> **Documentation**: [简体中文 README](README.md) · [Workspace Index](INDEX.md) · [Standalone PC Steam Toolkit (`dd-steam-toolkit/`)](dd-steam-toolkit/README.en.md) · [Architecture Overview](docs/ARCHITECTURE.md) · [Modifier Guide](docs/MODIFIER-GUIDE.md) · [Build & Test Guide](docs/BUILD-AND-TEST.md) · [Android Launcher (`app/`)](app/README.md) · [PC Converter (`dd-steam-converter/`)](dd-steam-converter/README.md)
 
 ---
 
@@ -66,6 +66,16 @@
 - **Non-Destructive Game Rules Modifier (`ContentModGenerator` / `content_modifier.py`)**:
   - 4 one-tap presets (`Vanilla` / `Quality of Life` / `Fast Progression` / `Overpowered`) and 4 grouped rule cards (Inventory & Supplies, Combat & Speed, Stress & Virtue, Town & Recruitment) generating a standalone removable override mod (`torch_content_modifier`) compatible with both Steam PC and Android.
 
+### 4. Standalone PC Steam Save Manager & Complete Modifier (`dd-steam-toolkit/`)
+> If you **only play *Darkest Dungeon* on PC Steam** and do not need Android conversion, you can use [dd-steam-toolkit/](dd-steam-toolkit/README.en.md) ([中文说明](dd-steam-toolkit/README.md)) completely standalone.
+
+- **Zero Third-Party Dependencies**: Built purely on the Python 3.10+ standard library—no `pip install` needed. Launch via `python dd-steam-toolkit\run.py` (or double-click `dd-steam-toolkit\启动余烬PC工坊.bat` on Windows) to open a native Chromium/Edge standalone desktop app window, with full CLI support and an optional single-file `.exe` packager (`build_exe.py`).
+- **Live Auto-Snapshots & Atomic Rollback**: Background watcher monitors `userdata/<UID>/262060/remote/profile_0..8` and captures SHA-256 deduplicated ZIP snapshots automatically whenever Steam saves. Supports snapshot diffs, notes, crash-safe transactional rollbacks (always backing up your active save first), and bidirectional ZIP import/export between PC Steam and Android Torch Launcher (auto-restoring `source: Steam` for subscribed Workshop IDs).
+- **Steam-Native Complete Editor & Load Order Manager**:
+  - Detects running `Darkest.exe` before writes to prevent in-memory overwrites or Steam Cloud conflicts;
+  - Includes all 5 editor tabs (Estate & Currencies, Heroes & Quirks/Diseases with absolute/percentage HP support, Categorized Trinket Codex dynamically indexing base + owned DLC trinkets & quirks, Town Buildings & Dungeon Regions, and Raw DSON Tree Browser penetrating embedded hero DSONs);
+  - Non-destructive rules mod (`torch_content_modifier`) scales both base and owned DLC hero stats plus `upgrades/building/` discounts, and strictly preserves `source: Steam` for existing Workshop subscriptions when mounting or reordering `applied_ugcs_1_0`.
+
 ---
 
 ## Repository Layout
@@ -112,12 +122,28 @@ python dd-steam-converter\run.py push --pak "dist\dd_assets.pak"
 python dd-steam-converter\run.py gui
 ```
 
+### Standalone PC Steam Save Manager & Modifier (Zero 3rd-Party Dependencies)
+
+```powershell
+# Launch the Ember PC desktop window (or double-click dd-steam-toolkit\启动余烬PC工坊.bat on Windows)
+python dd-steam-toolkit\run.py
+
+# Run background live auto-snapshot watcher in CLI mode
+python dd-steam-toolkit\run.py watch
+
+# Inspect Steam saves, create a manual snapshot, or install a balanced rules preset
+python dd-steam-toolkit\run.py detect
+python dd-steam-toolkit\run.py snapshot backup --slot profile_0 --note "Before Darkest Dungeon"
+python dd-steam-toolkit\run.py build-mod --preset adventurer --install-steam --enable-slot profile_0
+```
+
 ### Android Build & Automated Tests
 
 ```powershell
 # Compile Android launcher APK and run Android Lint (JDK 21 + Android SDK 36)
 gradle --offline :app:assembleDebug :app:lintDebug
 
-# Run Python unit tests (DSON round-trip, ASTC 4x4 encoder, migration, save & content modifiers)
+# Run Python unit tests (Steam converter + standalone PC Steam toolkit)
 python -m unittest discover -s dd-steam-converter\tests -v
+python -m unittest discover -s dd-steam-toolkit\tests -v
 ```

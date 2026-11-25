@@ -11,7 +11,7 @@
 > 4. **禁止商业与违规用途**：严禁将本项目或其转换生成的任何文件用于商业售卖、付费打包、绕过正版验证或未经授权的公开再分发；因违反相关法律法规或软件许可协议所引发的一切责任，均由使用者自行承担。
 > 5. **合规配合**：如版权方对本仓库中的任何内容存在异议，欢迎通过 Issue 联系仓库维护者，我们将在核实后第一时间配合修改或下架。
 
-> **文档导航**：[English README](README.en.md) · [工作区总索引 (INDEX.md)](INDEX.md) · [系统架构说明](docs/ARCHITECTURE.md) · [完整修改器指南](docs/MODIFIER-GUIDE.md) · [构建测试与部署](docs/BUILD-AND-TEST.md) · [Android 启动器模块](app/README.md) · [PC 转换器](dd-steam-converter/README.md) · [单测与工具集](game-patch/README.md)
+> **文档导航**：[English README](README.en.md) · [工作区总索引 (INDEX.md)](INDEX.md) · [独立 PC Steam 存档与修改器 (dd-steam-toolkit)](dd-steam-toolkit/README.md) · [系统架构说明](docs/ARCHITECTURE.md) · [完整修改器指南](docs/MODIFIER-GUIDE.md) · [构建测试与部署](docs/BUILD-AND-TEST.md) · [Android 启动器模块](app/README.md) · [PC 转换器](dd-steam-converter/README.md) · [单测与工具集](game-patch/README.md)
 
 ---
 
@@ -66,6 +66,16 @@
 - **非破坏性游戏规则修改器（`ContentModGenerator` / `content_modifier.py`）**：
   - 内置 4 套一键平衡预设（`还原原版 / 轻度舒适 / 爽快开荒 / 终极无双`）与 4 组主题卡片（背包补给、战斗节奏、压力美德、城镇招募），生成独立标准覆盖 Mod `torch_content_modifier`（PC Steam 与安卓通用，随时一键卸载还原）。
 
+### 4. 独立 PC Steam 版存档管家 & 完整修改器（`dd-steam-toolkit/`，纯 PC 玩家独立可用）
+> 若您**仅游玩 PC Steam 版《暗黑地牢》**、不需要安卓转换与部署功能，可直接单独使用 [dd-steam-toolkit/](dd-steam-toolkit/README.md)（[English Guide](dd-steam-toolkit/README.en.md)）。
+
+- **零第三方依赖、双击即开**：纯 Python 3.10+ 标准库驱动，无需 `pip install` 任何外部库，双击 `dd-steam-toolkit\启动余烬PC工坊.bat` 或执行 `python dd-steam-toolkit\run.py` 即可通过系统内置 Edge / Chrome 以**独立桌面应用窗口**运行，亦支持完整 CLI 与可选单文件 `.exe` 打包（`build_exe.py`）。
+- **实时自动留档 & 原子事务回档**：后台线程实时监听 Steam `userdata/<UID>/262060/remote/profile_0..8` 变动，每次游戏保存自动生成 SHA-256 去重校验快照；支持变更 Diff 对比、备注管理、一键原子回档（回档前强制备份现役存档），以及 Steam ↔ 安卓余烬存档 ZIP 互导（导回 PC 时可自动将本机已订阅工坊 ID 还原为 `source: Steam`）。
+- **Steam 深度适配的完整修改器 & 模组排序**：
+  - 写档/回档前自动检测 `Darkest.exe` 进程状态并给出 Steam Cloud 同步提示，防止内存回写或云存档覆盖；
+  - 完整复刻手机端 5 大精修页签（庄园货币、花名册英雄精修与怪癖疾病、分类饰品图鉴、城镇 8 座建筑与 6 大地牢区域、支持穿透英雄嵌套 DSON 的全字段原始浏览器），并自动索引本机 Steam 本体与全部已购 DLC 的饰品与怪癖库；
+  - 生成规则覆写 Mod `torch_content_modifier`（同步覆盖本体与已购 DLC 英雄数值及建筑升级折扣）或调整档位 Mod 排序时，**严格保留原有创意工坊 Mod 的 `source: Steam`**，支持一键卸载恢复原版。
+
 ---
 
 ## 目录结构
@@ -112,12 +122,28 @@ python dd-steam-converter\run.py push --pak "dist\dd_assets.pak"
 python dd-steam-converter\run.py gui
 ```
 
+### 独立 PC Steam 版存档管家 & 完整修改器（无需安装第三方依赖）
+
+```powershell
+# 启动余烬 PC 独立桌面窗口（Windows 亦可直接双击 dd-steam-toolkit\启动余烬PC工坊.bat）
+python dd-steam-toolkit\run.py
+
+# 仅在后台运行 Steam 存档实时自动留档守护
+python dd-steam-toolkit\run.py watch
+
+# 探测 Steam 环境、查看档位、手动留档或套用规则预设
+python dd-steam-toolkit\run.py detect
+python dd-steam-toolkit\run.py snapshot backup --slot profile_0 --note "进极暗地牢前"
+python dd-steam-toolkit\run.py build-mod --preset adventurer --install-steam --enable-slot profile_0
+```
+
 ### Android 启动器编译与自动化测试
 
 ```powershell
 # 编译 Android 启动器工程并执行静态检查（需 JDK 21 + Android SDK 36）
 gradle --offline :app:assembleDebug :app:lintDebug
 
-# 运行 Python 单元测试（DSON 无损往返、ASTC 4x4 编码、迁移、双修改器）
+# 运行 Python 单元测试（Steam 转安卓工具链 + 独立 PC Steam 存档与修改器）
 python -m unittest discover -s dd-steam-converter\tests -v
+python -m unittest discover -s dd-steam-toolkit\tests -v
 ```

@@ -1,6 +1,11 @@
 # dd-steam-toolkit — 《暗黑地牢》余烬 PC 工坊（Steam 独立存档管家 & 完整修改器）
 
-> 返回导航：[项目总览](../README.md) · [工作区总索引](../INDEX.md) · [修改器技术指南](../docs/MODIFIER-GUIDE.md) · [Android 启动器](../app/README.md)
+**简体中文** | [English](README.en.md)
+
+> [!IMPORTANT]
+> **免责声明与正版使用须知**：本工具仅供个人技术学习与单机体验辅助参考，使用前您**必须自行通过官方渠道合法购买并安装正版 Steam 版《暗黑地牢》（*Darkest Dungeon*）**；本项目为社区开源工具，与 Red Hook Studios 及 Valve/Steam 无任何官方关联，严禁用于商业售卖或违规再分发。完整声明见根目录 [README.md](../README.md)。
+
+> 返回导航：[项目总览](../README.md) · [English README](../README.en.md) · [工作区总索引](../INDEX.md) · [修改器技术指南](../docs/MODIFIER-GUIDE.md) · [Android 启动器](../app/README.md)
 
 从 Android「余烬一体化启动器」中独立拆出并深度适配 **PC Steam 正版《暗黑地牢》** 的桌面版存档管家与全功能修改器。
 
