@@ -68,8 +68,8 @@ final class LiveArchive {
         NxProcessControl.restartAndLaunchGame(context);
     }
 
-    void launchLegacyTools() {
-        NxProcessControl.launchLegacyTools(context);
+    String resetSwitchModCache() throws IOException {
+        return ModBridge.resetSwitchModCache(context);
     }
 
     History history() {

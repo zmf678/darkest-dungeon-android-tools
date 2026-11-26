@@ -267,6 +267,71 @@ public final class ModBridge {
         if (Files.exists(orig, LinkOption.NOFOLLOW_LINKS)) deleteTree(orig);
     }
 
+    /**
+     * Restores any lossless PNG backups left by the legacy iOS converter (.port-original),
+     * cleans up .pvr/.dsc/modfiles.txt.pc leftovers, and clears .port-switch markers so
+     * the Switch runtime cleanly re-indexes all installed mods on next launch.
+     */
+    public static String resetSwitchModCache(Context context) throws IOException {
+        NxProcessControl.stopGameProcess(context);
+        Path mods = modsDir(context).toPath();
+        int restoredPngs = 0;
+        int clearedMarks = 0;
+
+        Path orig = mods.resolve(".port-original");
+        if (Files.isDirectory(orig, LinkOption.NOFOLLOW_LINKS)) {
+            List<Path> backups;
+            try (Stream<Path> tree = Files.walk(orig)) {
+                backups = tree.filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS))
+                        .collect(Collectors.toList());
+            }
+            for (Path src : backups) {
+                Path rel = orig.relativize(src);
+                Path dst = mods.resolve(rel);
+                if (dst.getParent() != null) Files.createDirectories(dst.getParent());
+                Files.move(src, dst, StandardCopyOption.REPLACE_EXISTING);
+                restoredPngs++;
+                String fileName = dst.getFileName().toString();
+                int dot = fileName.lastIndexOf('.');
+                if (dot > 0 && dst.getParent() != null) {
+                    String stem = fileName.substring(0, dot);
+                    Files.deleteIfExists(dst.getParent().resolve(stem + ".pvr"));
+                    Files.deleteIfExists(dst.getParent().resolve(stem + ".dsc"));
+                }
+            }
+            deleteTree(orig);
+        }
+
+        try (Stream<Path> children = Files.list(mods)) {
+            for (Path child : children.collect(Collectors.toList())) {
+                String name = child.getFileName().toString();
+                if (!Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS) || name.startsWith(".")) continue;
+                Path pcManifest = child.resolve("modfiles.txt.pc");
+                Path manifest = child.resolve("modfiles.txt");
+                if (Files.isRegularFile(pcManifest, LinkOption.NOFOLLOW_LINKS)) {
+                    if (!Files.exists(manifest, LinkOption.NOFOLLOW_LINKS)) {
+                        Files.move(pcManifest, manifest, StandardCopyOption.REPLACE_EXISTING);
+                    } else {
+                        Files.deleteIfExists(pcManifest);
+                    }
+                }
+            }
+        }
+
+        Path switchMarks = mods.resolve(".port-switch");
+        if (Files.isDirectory(switchMarks, LinkOption.NOFOLLOW_LINKS)) {
+            try (Stream<Path> marks = Files.list(switchMarks)) {
+                clearedMarks = (int) marks.filter(p -> Files.isRegularFile(p, LinkOption.NOFOLLOW_LINKS)).count();
+            }
+            deleteTree(switchMarks);
+        }
+
+        if (restoredPngs > 0) {
+            return "已无损还原 " + restoredPngs + " 张原始贴图并清空 " + clearedMarks + " 个缓存标记，下次启动游戏将自动快速重建索引。";
+        }
+        return "已清空 " + clearedMarks + " 个 Switch 模组索引缓存，下次启动游戏将自动重建。";
+    }
+
     public static String listSlotModsJson(Context context) throws IOException {
         Path saves = savesDir(context);
         JSONArray array = new JSONArray();

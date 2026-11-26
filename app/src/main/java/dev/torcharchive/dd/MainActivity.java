@@ -938,15 +938,18 @@ public final class MainActivity extends Activity implements ModifierSection.Host
                 "通过 USB/文件管理器放到 Android/media/" + getPackageName() + "/dd_assets.pak，或在「启动」页选择导入（也支持同工具生成的 steam-migration.zip）。"), 8);
         add(block, guideItem("wrench", "3. 完整修改器安全规范",
                 "「修改」页提供全维度存档编辑（货币/全英雄/怪癖疾病/饰品/建筑满级/原始 DSON 树）与非破坏性规则修改器。所有写档均强制先生成备份快照，不怕误改。"), 8);
-        add(block, guideItem("screen", "4. 原版内置应急工具",
-                "如需手动触发原版 Wicked 内置的 Mod 贴图预转换调试页，可从下方按钮进入。"), 8);
-        add(block, button("打开原版内置工具页 (ru.darkest.port.MainActivity)", false, () -> {
-            try {
-                live.launchLegacyTools();
-            } catch (Exception err) {
-                error("无法打开原版工具页：" + err.getMessage());
-            }
-        }), 12);
+        add(block, guideItem("screen", "4. 模组索引与贴图修复",
+                "如遇 Mod 未生效、贴图异常或曾误触旧版贴图转换，可点击下方按钮还原原始贴图并清空 Switch 模组索引缓存，下次启动将自动快速重建。"), 8);
+        add(block, button("重建 Switch 模组缓存并修复贴图", false, () ->
+                perform("正在清理 Switch 模组缓存…", () -> {
+                    String summary = live.resetSwitchModCache();
+                    LiveSnapshot snap = fetchLiveSnapshot();
+                    return new Object[]{summary, snap};
+                }, result -> {
+                    Object[] pair = (Object[]) result;
+                    applyLiveSnapshot((LiveSnapshot) pair[1]);
+                    message((String) pair[0]);
+                })), 12);
         return block;
     }
 

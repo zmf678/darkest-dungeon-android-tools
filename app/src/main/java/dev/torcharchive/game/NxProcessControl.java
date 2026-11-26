@@ -14,7 +14,6 @@ import java.util.List;
 public final class NxProcessControl {
     private static final String TAG = "TorchArchive";
     public static final String NX_ACTIVITY = "ru.darkest.port.NxActivity";
-    public static final String LEGACY_MAIN_ACTIVITY = "ru.darkest.port.MainActivity";
 
     private NxProcessControl() {}
 
@@ -50,13 +49,6 @@ public final class NxProcessControl {
     public static void restartAndLaunchGame(Context context) {
         stopGameProcess(context);
         launchGame(context);
-    }
-
-    public static void launchLegacyTools(Context context) {
-        Intent intent = new Intent();
-        intent.setClassName(context.getPackageName(), LEGACY_MAIN_ACTIVITY);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        context.startActivity(intent);
     }
 
     private static int findNxPid(Context context) {

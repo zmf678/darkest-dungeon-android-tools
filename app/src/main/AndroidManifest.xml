@@ -15,11 +15,6 @@
             android:screenOrientation="sensorLandscape"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density" />
-        <activity android:name="ru.darkest.port.MainActivity"
-            android:exported="false" android:resizeableActivity="false"
-            android:screenOrientation="sensorLandscape"
-            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
-            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density" />
         <activity android:name="ru.darkest.port.RestartActivity" android:process=":restart"
             android:exported="false" android:excludeFromRecents="true" android:noHistory="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
